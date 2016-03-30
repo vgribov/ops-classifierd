@@ -1,4 +1,4 @@
-# (c) Copyright 2015 Hewlett Packard Enterprise Development LP
+# (c) Copyright 2016 Hewlett Packard Enterprise Development LP
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -14,8 +14,12 @@
 
 cmake_minimum_required (VERSION 2.8)
 
-# Add any sub-feature directories here
-# add_subdirectory(acl)
-add_subdirectory(copp)
-# add_subdirectory(mirror)
-add_subdirectory(qos)
+PROJECT(copp)
+
+MESSAGE("got to copp")
+set(COPP_INCL_DIR "${PROJECT_SOURCE_DIR}/include")
+MESSAGE("PROJECT_SOURCE_DIR=${PROJECT_SOURCE_DIR}")
+MESSAGE("COPP_INCL_DIR=${COPP_INCL_DIR}")
+
+add_subdirectory(cli)
+add_subdirectory(switchd-plugin)

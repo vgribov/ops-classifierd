@@ -48,5 +48,6 @@ install(TARGETS ${CLASSIFIERD}
         RUNTIME DESTINATION bin)
 
 install (FILES ${HEADERS} DESTINATION include)
+
 # Build sub-features
 add_subdirectory(src)
