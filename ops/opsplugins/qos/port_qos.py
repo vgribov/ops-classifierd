@@ -63,6 +63,9 @@ class PortQosValidator(BaseValidator):
         qos_trust_name = qos_utils.QOS_TRUST_NONE_STRING
 
         if system_row is not None:
+            if not hasattr(system_row, 'qos_config'):
+                break
+
             qos_config = utils.get_column_data_from_row(system_row,
                                                         "qos_config")
             system_value = qos_config.get(qos_utils.QOS_TRUST_KEY, None)
@@ -70,6 +73,9 @@ class PortQosValidator(BaseValidator):
                 qos_trust_name = system_value
 
         if port_row is not None:
+            if not hasattr(port_row, 'qos_config'):
+                break
+
             qos_config = utils.get_column_data_from_row(port_row,
                                                         "qos_config")
             port_value = qos_config.get(qos_utils.QOS_TRUST_KEY, None)
@@ -84,6 +90,9 @@ class PortQosValidator(BaseValidator):
     #
     def validate_port_override_has_port_trust_mode_none(
             self, port_row, system_row, qos_config_key, display_string):
+        if not hasattr(port_row, 'qos_config'):
+            return
+
         qos_config = utils.get_column_data_from_row(port_row, "qos_config")
 
         qos_override = qos_config.get(qos_config_key, None)
@@ -107,6 +116,9 @@ class PortQosValidator(BaseValidator):
     # Validates that the port queue profile is null.
     #
     def validate_apply_port_queue_profile_is_null(self, port_row):
+        if not hasattr(port_row, 'q_profile'):
+            return
+
         q_profile = utils.get_column_data_from_row(port_row, "q_profile")
         if q_profile != []:
             details = "Port-level queue profile is not supported."
@@ -118,6 +130,9 @@ class PortQosValidator(BaseValidator):
     #
     def validate_apply_port_s_p_has_all_same_algorithm_on_all_queues(
             self, port_row):
+        if not hasattr(port_row, 'qos'):
+            return
+
         schedule_profile = utils.get_column_data_from_row(port_row, "qos")
         if schedule_profile == []:
             return
@@ -131,8 +146,14 @@ class PortQosValidator(BaseValidator):
     #
     def validate_apply_port_profiles_contain_same_queues(
             self, port_row, system_row):
+        if not hasattr(port_row, 'qos'):
+            return
+
         schedule_profile = utils.get_column_data_from_row(port_row, "qos")
         if schedule_profile == []:
+            return
+
+        if not hasattr(system_row, 'q_profile'):
             return
 
         queue_profile = utils.get_column_data_from_row(system_row, "q_profile")
