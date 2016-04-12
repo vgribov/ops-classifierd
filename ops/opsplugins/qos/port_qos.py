@@ -63,24 +63,20 @@ class PortQosValidator(BaseValidator):
         qos_trust_name = qos_utils.QOS_TRUST_NONE_STRING
 
         if system_row is not None:
-            if not hasattr(system_row, 'qos_config'):
-                break
-
-            qos_config = utils.get_column_data_from_row(system_row,
-                                                        "qos_config")
-            system_value = qos_config.get(qos_utils.QOS_TRUST_KEY, None)
-            if system_value is not None:
-                qos_trust_name = system_value
+            if hasattr(system_row, 'qos_config'):
+                qos_config = utils.get_column_data_from_row(system_row,
+                                                            "qos_config")
+                system_value = qos_config.get(qos_utils.QOS_TRUST_KEY, None)
+                if system_value is not None:
+                    qos_trust_name = system_value
 
         if port_row is not None:
-            if not hasattr(port_row, 'qos_config'):
-                break
-
-            qos_config = utils.get_column_data_from_row(port_row,
-                                                        "qos_config")
-            port_value = qos_config.get(qos_utils.QOS_TRUST_KEY, None)
-            if port_value is not None:
-                qos_trust_name = port_value
+            if hasattr(port_row, 'qos_config'):
+                qos_config = utils.get_column_data_from_row(port_row,
+                                                            "qos_config")
+                port_value = qos_config.get(qos_utils.QOS_TRUST_KEY, None)
+                if port_value is not None:
+                    qos_trust_name = port_value
 
         return qos_trust_name
 
