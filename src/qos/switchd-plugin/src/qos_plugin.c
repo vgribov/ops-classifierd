@@ -27,10 +27,12 @@
 #include "openvswitch/vlog.h"
 #include "plugin-extensions.h"
 #include "qos-asic-provider.h"
+#include "qos_statistics.h"
 #include "qos_utils.h"
 #include "reconfigure-blocks.h"
 #include "shash.h"
 #include "smap.h"
+#include "stats-blocks.h"
 #include "vswitch-idl.h"
 
 VLOG_DEFINE_THIS_MODULE(qos_plugin);
@@ -40,13 +42,18 @@ static struct plugin_extension_interface *extension = NULL;
 static struct qos_asic_plugin_interface *plugin = NULL;
 
 
-/* Initialization (called once) - register for bridge_reconfigure callbacks. */
+/* Initialization (called once) - register for callbacks. */
 int init(int phase_id)
 {
     int ret = 0;
 
+    VLOG_INFO("[%s] Registering BLK_BRIDGE_INIT", QOS_PLUGIN_NAME);
+    register_reconfigure_callback(&qos_callback_init,
+                                  BLK_BRIDGE_INIT, NO_PRIORITY);
+
     VLOG_INFO("[%s] Registering in BLK_INIT_RECONFIGURE", QOS_PLUGIN_NAME);
-    register_reconfigure_callback(&qos_callback_init, BLK_INIT_RECONFIGURE, NO_PRIORITY);
+    register_reconfigure_callback(&qos_callback_reconfigure_init,
+                                  BLK_INIT_RECONFIGURE, NO_PRIORITY);
 
     VLOG_INFO("[%s] Registering in BLK_BR_RECONFIGURE_PORTS", QOS_PLUGIN_NAME);
     register_reconfigure_callback(&qos_callback_reconfigure_bridge,
@@ -55,6 +62,31 @@ int init(int phase_id)
     VLOG_INFO("[%s] Registering in BLK_VRF_RECONFIGURE_PORTS", QOS_PLUGIN_NAME);
     register_reconfigure_callback(&qos_callback_reconfigure_vrf,
                                   BLK_VRF_RECONFIGURE_PORTS, NO_PRIORITY);
+
+    for (int blk_id = 0; blk_id < (int)MAX_STATS_BLOCKS_NUM; blk_id++) {
+        switch (blk_id) {
+        case STATS_PER_BRIDGE_NETDEV:
+        case STATS_PER_VRF_NETDEV:
+        case STATS_PER_SUBSYSTEM_NETDEV:
+            VLOG_INFO("[%s] Registering STATS_PER_xxx_NETDEV", QOS_PLUGIN_NAME);
+            register_stats_callback(&qos_callback_statistics_netdev,
+                                    blk_id, NO_PRIORITY);
+            break;
+        case STATS_BRIDGE_CREATE_NETDEV:
+        case STATS_SUBSYSTEM_CREATE_NETDEV:
+            VLOG_INFO("[%s] Registering STATS_xxx_CREATE_NETDEV", QOS_PLUGIN_NAME);
+            register_stats_callback(&qos_callback_statistics_create_netdev,
+                                    blk_id, NO_PRIORITY);
+            break;
+
+        default:
+#ifdef QOS_STATS_DEBUG
+            VLOG_INFO("[%s] Registering STATS block %d", QOS_PLUGIN_NAME, blk_id);
+            register_stats_callback(&qos_callback_statistics_default, blk_id, NO_PRIORITY);
+#endif
+            break;
+        }
+    }
 
     return ret;
 }
@@ -196,6 +228,8 @@ int ofproto_apply_qos_profile(struct ofproto *ofproto,
                                    aux,
                                    s_settings,
                                    q_settings);
+
+    VLOG_DBG("%s rv=%d", __FUNCTION__, rv);
 
     return rv;
 }

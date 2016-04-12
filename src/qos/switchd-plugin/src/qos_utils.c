@@ -50,7 +50,7 @@ void qos_configure(struct ofproto *ofproto,
 /**
  * bridge_reconfigure BLK_INIT_RECONFIGURE callback handler
  */
-void qos_callback_init(struct blk_params *blk_params)
+void qos_callback_reconfigure_init(struct blk_params *blk_params)
 {
 
     /* check for global qos-trust change. */
@@ -76,7 +76,7 @@ void qos_callback_reconfigure(struct blk_params *blk_params, struct hmap *ports)
 
     /* loop through all ports */
     HMAP_FOR_EACH(port, hmap_node, ports) {
-        VLOG_DBG("%s: port %s", __FUNCTION__, blk_params->port->cfg->name);
+        VLOG_DBG("%s: port %s", __FUNCTION__, port->cfg->name);
 
         qos_trust_send_change(blk_params->ofproto,
                               port, port->cfg,
@@ -114,4 +114,17 @@ void qos_callback_reconfigure_vrf(struct blk_params *blk_params)
              blk_params->ofproto, blk_params->vrf);
 
     qos_callback_reconfigure(blk_params, &blk_params->vrf->up->ports);
+}
+
+/**
+ * bridge_reconfigure BLK_BRIDGE_INIT callback handler
+ */
+void qos_callback_init(struct blk_params *blk_params)
+{
+    ovsdb_idl_omit_alert(blk_params->idl, &ovsrec_port_col_qos_status);
+    ovsdb_idl_omit_alert(blk_params->idl, &ovsrec_system_col_qos_status);
+    ovsdb_idl_omit_alert(blk_params->idl, &ovsrec_system_col_status);
+    ovsdb_idl_omit_alert(blk_params->idl, &ovsrec_interface_col_queue_tx_bytes);
+    ovsdb_idl_omit_alert(blk_params->idl, &ovsrec_interface_col_queue_tx_packets);
+    ovsdb_idl_omit_alert(blk_params->idl, &ovsrec_interface_col_queue_tx_errors);
 }
