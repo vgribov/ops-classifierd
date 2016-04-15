@@ -215,25 +215,6 @@ remark all of them to 0 (Default)\n"
 }
 
 /**
- * Executes the trust_port_show command for the given port_row.
- */
-void
-qos_trust_port_show(const struct ovsrec_port *port_row)
-{
-    if (port_row == NULL) {
-        return;
-    }
-
-    if (is_member_of_lag(port_row->name)) {
-        return;
-    }
-
-    const char *qos_trust_name = qos_trust_port_get_value(port_row);
-
-    vty_out(vty, " qos trust %s%s", qos_trust_name, VTY_NEWLINE);
-}
-
-/**
  * Initializes qos_trust_port_vty.
  */
 void

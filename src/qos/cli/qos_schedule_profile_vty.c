@@ -1190,11 +1190,46 @@ DEFUN(qos_schedule_profile_show_all,
 }
 
 /**
- * Shows the running config for schedule_profile. Returns true if the applied
- * profile differs from the default profile.
+ * Prints the profile.
  */
-bool
-qos_schedule_profile_show_running_config(void)
+static void
+print_profile(struct ovsrec_qos *profile_row)
+{
+    /* Show profile name. */
+    vty_out(vty, "qos schedule-profile %s%s", profile_row->name,
+            VTY_NEWLINE);
+
+    int i;
+    for (i = 0; i < profile_row->n_queues; i++) {
+        int64_t queue_num =
+                profile_row->key_queues[i];
+        struct ovsrec_queue *profile_entry =
+                profile_row->value_queues[i];
+
+        /* Show algorithm. */
+        if (profile_entry->algorithm != NULL &&
+                strncmp(profile_entry->algorithm, "",
+                        QOS_CLI_STRING_BUFFER_SIZE) != 0) {
+            vty_out(vty, "    %s queue %" PRId64 " ",
+                    profile_entry->algorithm, queue_num);
+        }
+
+        /* Show weight. */
+        if (profile_entry->weight != NULL) {
+            vty_out(vty, "weight %" PRId64 " ",
+                    *profile_entry->weight);
+        }
+
+        /* End with a new line. */
+        vty_out(vty, "%s", VTY_NEWLINE);
+    }
+}
+
+/**
+ * Returns true if the given profile differs from the factory default.
+ */
+static bool
+differs_from_factory_default(struct ovsrec_qos *profile_row)
 {
     struct ovsrec_qos *default_profile_row = qos_get_schedule_profile_row(
             QOS_FACTORY_DEFAULT_NAME);
@@ -1204,17 +1239,12 @@ qos_schedule_profile_show_running_config(void)
         return false;
     }
 
-    const struct ovsrec_system *system_row = ovsrec_system_first(idl);
-    struct ovsrec_qos *applied_profile_row = system_row->qos;
-
-    bool differs_from_default = false;
-
     /* Compare profile name. */
-    if (strncmp(applied_profile_row->name, default_profile_row->name,
+    if (strncmp(profile_row->name, default_profile_row->name,
             QOS_CLI_STRING_BUFFER_SIZE) != 0 &&
-            strncmp(applied_profile_row->name, QOS_DEFAULT_NAME,
+            strncmp(profile_row->name, QOS_DEFAULT_NAME,
                     QOS_CLI_STRING_BUFFER_SIZE) != 0) {
-        differs_from_default = true;
+        return true;
     }
 
     int i;
@@ -1224,78 +1254,65 @@ qos_schedule_profile_show_running_config(void)
         struct ovsrec_queue *default_profile_entry =
                 default_profile_row->value_queues[i];
 
-        struct ovsrec_queue *applied_profile_entry =
+        struct ovsrec_queue *profile_entry =
                 qos_get_schedule_profile_entry_row(
-                        applied_profile_row, default_queue_num);
-        if (applied_profile_entry == NULL) {
+                        profile_row, default_queue_num);
+        if (profile_entry == NULL) {
             /* If the applied profile does not contain a queue_num from the */
-            /* default profile, then a difference was found and the loop */
-            /* can be terminated. */
-            differs_from_default = true;
-            break;
+            /* default profile, then a difference was found. */
+            return true;
         }
 
         /* Compare algorithm. */
-        if (applied_profile_entry->algorithm != NULL &&
-                strncmp(applied_profile_entry->algorithm,
+        if (profile_entry->algorithm != NULL &&
+                strncmp(profile_entry->algorithm,
                         default_profile_entry->algorithm,
                         QOS_CLI_STRING_BUFFER_SIZE) != 0) {
-            differs_from_default = true;
+            return true;
         }
 
         /* Compare weight. */
-        if (applied_profile_entry->weight !=
+        if (profile_entry->weight !=
                 default_profile_entry->weight) {
-            if (applied_profile_entry->weight == NULL ||
+            if (profile_entry->weight == NULL ||
                     default_profile_entry->weight == NULL) {
-                differs_from_default = true;
-            } else if (*applied_profile_entry->weight !=
+                return true;
+            } else if (*profile_entry->weight !=
                     *default_profile_entry->weight) {
-                differs_from_default = true;
+                return true;
             }
         }
     }
 
-    /* If it's the strict profile, then there's no command to create the
-     * strict profile, so just return. */
-    if (strncmp(applied_profile_row->name, OVSREC_QUEUE_ALGORITHM_STRICT,
-            QOS_CLI_STRING_BUFFER_SIZE) == 0) {
-        return differs_from_default;
-    }
+    return false;
+}
 
-    /* Show the command if it differs from the default. */
-    if (differs_from_default) {
-        /* Show profile name. */
-        vty_out(vty, "qos schedule-profile %s%s", applied_profile_row->name,
-                VTY_NEWLINE);
-
-        int i;
-        for (i = 0; i < applied_profile_row->n_queues; i++) {
-            int64_t queue_num =
-                    applied_profile_row->key_queues[i];
-            struct ovsrec_queue *applied_profile_entry =
-                    applied_profile_row->value_queues[i];
-
-            /* Show algorithm. */
-            if (applied_profile_entry->algorithm != NULL &&
-                    strncmp(applied_profile_entry->algorithm, "",
-                            QOS_CLI_STRING_BUFFER_SIZE) != 0) {
-                vty_out(vty, "    %s queue %" PRId64 " ",
-                        applied_profile_entry->algorithm, queue_num);
+/**
+ * Shows the running config for the profile.
+ */
+void
+qos_schedule_profile_show_running_config(void)
+{
+    const struct ovsrec_qos *profile_row;
+    OVSREC_QOS_FOR_EACH(profile_row, idl) {
+        if ((strncmp(profile_row->name, QOS_FACTORY_DEFAULT_NAME,
+                QOS_CLI_STRING_BUFFER_SIZE) == 0) ||
+                (strncmp(profile_row->name, OVSREC_QUEUE_ALGORITHM_STRICT,
+                        QOS_CLI_STRING_BUFFER_SIZE) == 0)) {
+            /* Never print factory default profile since it never changes. */
+            /* Never print the strict profile since it never changes. */
+        } else if (strncmp(profile_row->name, QOS_DEFAULT_NAME,
+                QOS_CLI_STRING_BUFFER_SIZE) == 0) {
+            /* Print the default profile if different from factory default. */
+            if (differs_from_factory_default(
+                    (struct ovsrec_qos *) profile_row)) {
+                print_profile((struct ovsrec_qos *) profile_row);
             }
-
-            /* Show weight. */
-            if (applied_profile_entry->weight != NULL) {
-                vty_out(vty, "weight %" PRId64 " ",
-                        *applied_profile_entry->weight);
-            }
-
-            /* End with a new line. */
-            vty_out(vty, "%s", VTY_NEWLINE);
+        } else {
+            /* Always print non-default profiles. */
+            print_profile((struct ovsrec_qos *) profile_row);
         }
     }
-
-    return differs_from_default;
 }
 
 /**

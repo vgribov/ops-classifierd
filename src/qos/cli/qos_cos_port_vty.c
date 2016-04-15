@@ -195,29 +195,6 @@ DEFUN(qos_cos_port_no,
 }
 
 /**
- * Shows the cos_port override for the given port_row.
- */
-void
-qos_cos_port_show(const struct ovsrec_port *port_row)
-{
-    if (port_row == NULL) {
-        return;
-    }
-
-    if (is_member_of_lag(port_row->name)) {
-        return;
-    }
-
-    const char *cos_map_index = smap_get(&port_row->qos_config,
-            QOS_COS_OVERRIDE_KEY);
-    if (cos_map_index == NULL) {
-        return;
-    }
-
-    vty_out(vty, " qos cos override %s%s", cos_map_index, VTY_NEWLINE);
-}
-
-/**
  * Initializes qos_cos_port_vty.
  */
 void

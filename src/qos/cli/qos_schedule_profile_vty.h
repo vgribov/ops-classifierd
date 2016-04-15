@@ -30,10 +30,9 @@
 int qos_schedule_profile_create_strict_profile_commit(void);
 
 /**
- * Shows the running config for schedule_profile. Returns true if the applied
- * profile differs from the default profile.
+ * Shows the running config for schedule_profile.
  */
-bool qos_schedule_profile_show_running_config(void);
+void qos_schedule_profile_show_running_config(void);
 
 /**
  * Returns true if the schedule profile contains the queue_num.

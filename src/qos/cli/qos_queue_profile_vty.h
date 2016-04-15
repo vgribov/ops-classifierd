@@ -24,10 +24,9 @@
 #include "vswitch-idl.h"
 
 /**
- * Shows the running config for queue_profile. Returns true if the applied
- * profile differs from the default profile.
+ * Shows the running config for queue_profile.
  */
-bool qos_queue_profile_show_running_config(void);
+void qos_queue_profile_show_running_config(void);
 
 /**
  * Returns true if the queue profile has the queue_num.

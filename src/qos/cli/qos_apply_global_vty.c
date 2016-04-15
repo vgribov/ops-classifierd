@@ -282,18 +282,23 @@ static vtysh_ret_val
 qos_apply_global_show_running_config_callback(
         void *p_private)
 {
+    qos_queue_profile_show_running_config();
+    qos_schedule_profile_show_running_config();
+
+    const struct ovsrec_system *system_row = ovsrec_system_first(idl);
+    struct ovsrec_q_profile *q_profile_row = system_row->q_profile;
+    struct ovsrec_qos *schedule_profile_row = system_row->qos;
+
     bool queue_profile_differs_from_default =
-            qos_queue_profile_show_running_config();
+            strncmp(q_profile_row->name, QOS_DEFAULT_NAME,
+                    QOS_CLI_STRING_BUFFER_SIZE) != 0;
 
     bool schedule_profile_differs_from_default =
-            qos_schedule_profile_show_running_config();
+            strncmp(schedule_profile_row->name, QOS_DEFAULT_NAME,
+                    QOS_CLI_STRING_BUFFER_SIZE) != 0;
 
     if (queue_profile_differs_from_default ||
             schedule_profile_differs_from_default) {
-        const struct ovsrec_system *system_row = ovsrec_system_first(idl);
-        struct ovsrec_q_profile *q_profile_row = system_row->q_profile;
-        struct ovsrec_qos *schedule_profile_row = system_row->qos;
-
         /* Show the apply command. */
         vty_out(vty, "apply qos queue-profile %s schedule-profile %s%s",
                 q_profile_row->name, schedule_profile_row->name,
