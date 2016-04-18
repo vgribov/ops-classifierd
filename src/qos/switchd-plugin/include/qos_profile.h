@@ -29,8 +29,9 @@ int qos_apply_profile(struct ofproto *ofproto,
 void qos_configure_global_profiles(struct ofproto *ofproto,
                                    struct ovsdb_idl *idl, unsigned int idl_seqno);
 void qos_configure_port_profiles(struct ofproto *ofproto,
-                                 const struct ovsrec_port *port_cfg,
                                  void *aux, /* struct port *port */
-                                 struct ovsdb_idl *idl, unsigned int idl_seqno);
+                                 const struct ovsrec_port *port_cfg,
+                                 struct ovsdb_idl *idl, unsigned int idl_seqno,
+                                 bool force_update);
 
 #endif /* _QOS_PROFILE_H_ */

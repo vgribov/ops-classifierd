@@ -301,9 +301,10 @@ qos_configure_global_profiles(struct ofproto *ofproto,
 
     ovs_row = ovsrec_system_first(idl);
 
-    /* Has System row changed? */
-    if (OVSREC_IDL_IS_ROW_MODIFIED(ovs_row, idl_seqno) ||
-        OVSREC_IDL_IS_ROW_INSERTED(ovs_row, idl_seqno)) {
+    /* Has queue or schedule profile in the System row changed? */
+    if (OVSREC_IDL_IS_ROW_MODIFIED(ovs_row, idl_seqno) &&
+        (OVSREC_IDL_IS_COLUMN_MODIFIED(ovsrec_system_col_q_profile, idl_seqno) ||
+         OVSREC_IDL_IS_COLUMN_MODIFIED(ovsrec_system_col_qos, idl_seqno))) {
 
         /* compare configured name with applied name.  If they
          * don't match, try to apply them.
@@ -312,7 +313,6 @@ qos_configure_global_profiles(struct ofproto *ofproto,
          *      if no default, give up -- don't change anything.
          */
         queue_profile_applied = smap_get(&ovs_row->qos_status, "queue_profile");
-        schedule_profile_applied = smap_get(&ovs_row->qos_status, "schedule_profile");
 
         /* Determine if queue profile must be applied. */
         apply_queue_profile_needed = false;
@@ -343,6 +343,15 @@ qos_configure_global_profiles(struct ofproto *ofproto,
             /* no queue profile defined -- do no harm -- get out. */
             return;
         }
+
+        /* Has schedule profile in the System row changed? */
+        /* compare configured name with applied name.  If they
+         * don't match, try to apply them.
+         *
+         * NOTE: if no profile is configured, use "default" profile
+         *      if no default, give up -- don't change anything.
+         */
+        schedule_profile_applied = smap_get(&ovs_row->qos_status, "schedule_profile");
 
         /* Determine if schedule profile must be applied. */
         apply_schedule_profile_needed = false;
@@ -411,9 +420,10 @@ qos_configure_global_profiles(struct ofproto *ofproto,
 /* Apply queue and schedule profiles to a port. */
 void
 qos_configure_port_profiles(struct ofproto *ofproto,
-                            const struct ovsrec_port *port_cfg,
                             void *aux, /* struct port *port */
-                            struct ovsdb_idl *idl, unsigned int idl_seqno)
+                            const struct ovsrec_port *port_cfg,
+                            struct ovsdb_idl *idl, unsigned int idl_seqno,
+                            bool force_update)
 {
     const struct ovsrec_system *ovs_row = NULL;
     const struct ovsrec_q_profile *ovsrec_q_profile;
@@ -432,15 +442,18 @@ qos_configure_port_profiles(struct ofproto *ofproto,
 
     ovs_row = ovsrec_system_first(idl);
 
-    /* if no queue profile is configured, try to find something to use:
+    /* if no queue profile is configured, & global has changed,
+     * try to find something to use:
      * 1. global queue profile from System row
      * 2. "default" queue profile
      * 3. "factory-default" queue profile (iow, profile has hw_default = TRUE)
      */
     ovsrec_q_profile = port_cfg->q_profile;
     if (ovsrec_q_profile == NULL) {
+        /* No local profile, use the System default. */
         ovsrec_q_profile = ovs_row->q_profile;
         if (ovsrec_q_profile == NULL) {
+            /* No System global queue profile, is there a default? */
             OVSREC_Q_PROFILE_FOR_EACH(ovsrec_q_profile, idl) {
                 if (!strcmp(QOS_DEFAULT_NAME, ovsrec_q_profile->name))
                     break;
@@ -449,7 +462,7 @@ qos_configure_port_profiles(struct ofproto *ofproto,
                 /* search for "factory-default" profile */
                 OVSREC_Q_PROFILE_FOR_EACH(ovsrec_q_profile, idl) {
                     if (ovsrec_q_profile->hw_default &&
-                                    *ovsrec_q_profile->hw_default) {
+                            *ovsrec_q_profile->hw_default) {
                         break;
                     }
                 }
@@ -457,40 +470,42 @@ qos_configure_port_profiles(struct ofproto *ofproto,
         }
     }
     if (ovsrec_q_profile == NULL) {
-        /* no queue profile defined -- do no harm -- get out. */
+        /* No global queue profile defined -- do no harm -- get out. */
         VLOG_INFO("%s: port %s no queue profile defined. NO CHANGE.",
                   __FUNCTION__, port_cfg->name);
         return;
     }
 
-    /* if no schedule profile is configured, try to find something to use:
-     * 1. global schedule profile (already done at the start of this function)
+    /* if no schedule profile is configured and global profile has changed,
+     * try to find something to use:
+     * 1. global schedule profile
      * 2. "default" schedule profile
      * 3. "factory-default" schedule profile (iow, profile has hw_default = TRUE)
      */
     ovsrec_qos = port_cfg->qos;
     if (ovsrec_qos == NULL) {
+        /* No local profile, use System default. */
         ovsrec_qos = ovs_row->qos;
-    }
-    if (ovsrec_qos == NULL) {
-        /* search for "default" profile */
-        OVSREC_QOS_FOR_EACH(ovsrec_qos, idl) {
-            if (!strcmp(QOS_DEFAULT_NAME, ovsrec_qos->name))
-                break;
-        }
         if (ovsrec_qos == NULL) {
-            /* search for "factory-default" profile */
+            /* No System global schedule profile, is there a default? */
             OVSREC_QOS_FOR_EACH(ovsrec_qos, idl) {
-                if (ovsrec_qos->hw_default && *ovsrec_qos->hw_default) {
+                if (!strcmp(QOS_DEFAULT_NAME, ovsrec_qos->name))
                     break;
+            }
+            if (ovsrec_qos == NULL) {
+                /* search for "factory-default" profile */
+                OVSREC_QOS_FOR_EACH(ovsrec_qos, idl) {
+                    if (ovsrec_qos->hw_default && *ovsrec_qos->hw_default) {
+                        break;
+                    }
                 }
             }
         }
     }
     if (ovsrec_qos == NULL) {
-        /* no schedule profile defined -- do no harm -- get out. */
+        /* No global schedule profile defined -- do no harm -- get out. */
         VLOG_INFO("%s: port %s no schedule profile defined. NO CHANGE.",
-                  __FUNCTION__, port_cfg->name);
+        __FUNCTION__, port_cfg->name);
         return;
     }
 
@@ -505,7 +520,7 @@ qos_configure_port_profiles(struct ofproto *ofproto,
     apply_profile_needed = false;
 
     /* Investigate if applied queue profile has changed. */
-    if (!queue_profile_applied) {
+    if (!queue_profile_applied || force_update) {
         /* No queue profile is applied, we need to apply one. */
         apply_profile_needed = true;
         queue_profile_applied = "";
@@ -514,14 +529,15 @@ qos_configure_port_profiles(struct ofproto *ofproto,
 
         /* If name changed, we must apply new profile. */
         if (ovsrec_q_profile->name) {
-            /* strcmp returns true if names don't match. */
-            apply_profile_needed = strcmp(ovsrec_q_profile->name,
-                                          queue_profile_applied);
+            if (strcmp(ovsrec_q_profile->name, queue_profile_applied)) {
+                /* Names don't match. */
+                apply_profile_needed = true;
+            }
         }
     }
 
     if (!apply_profile_needed) {
-        if (!schedule_profile_applied) {
+        if (!schedule_profile_applied || force_update) {
             /* No schedule profile is applied, we need to apply one. */
             apply_profile_needed = true;
             schedule_profile_applied = "";

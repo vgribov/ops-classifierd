@@ -54,7 +54,8 @@ qos_get_color(const char *color_text)
 
 /* Configure QOS COS maps for a particular bridge. */
 void
-qos_configure_cos_map(struct ofproto *ofproto, struct ovsdb_idl *idl, unsigned int idl_seqno)
+qos_configure_global_cos_map(struct ofproto *ofproto,
+                             struct ovsdb_idl *idl, unsigned int idl_seqno)
 {
     int n_modified;
     const struct ovsrec_qos_cos_map_entry *ovsrec_cos_map_entry;
@@ -101,7 +102,8 @@ qos_configure_cos_map(struct ofproto *ofproto, struct ovsdb_idl *idl, unsigned i
 
 /* Configure QOS DSCP maps for a particular bridge. */
 void
-qos_configure_dscp_map(struct ofproto *ofproto, struct ovsdb_idl *idl, unsigned int idl_seqno)
+qos_configure_global_dscp_map(struct ofproto *ofproto,
+                              struct ovsdb_idl *idl, unsigned int idl_seqno)
 {
     int n_modified;
     const struct ovsrec_qos_dscp_map_entry *ovsrec_dscp_map_entry;

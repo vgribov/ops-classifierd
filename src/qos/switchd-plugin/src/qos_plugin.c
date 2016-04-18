@@ -37,59 +37,9 @@
 
 VLOG_DEFINE_THIS_MODULE(qos_plugin);
 
-static bool plugin_init_done = false;
 static struct plugin_extension_interface *extension = NULL;
 static struct qos_asic_plugin_interface *plugin = NULL;
 
-
-/* Initialization (called once) - register for callbacks. */
-int init(int phase_id)
-{
-    int ret = 0;
-
-    VLOG_INFO("[%s] Registering BLK_BRIDGE_INIT", QOS_PLUGIN_NAME);
-    register_reconfigure_callback(&qos_callback_init,
-                                  BLK_BRIDGE_INIT, NO_PRIORITY);
-
-    VLOG_INFO("[%s] Registering in BLK_INIT_RECONFIGURE", QOS_PLUGIN_NAME);
-    register_reconfigure_callback(&qos_callback_reconfigure_init,
-                                  BLK_INIT_RECONFIGURE, NO_PRIORITY);
-
-    VLOG_INFO("[%s] Registering in BLK_BR_RECONFIGURE_PORTS", QOS_PLUGIN_NAME);
-    register_reconfigure_callback(&qos_callback_reconfigure_bridge,
-                                  BLK_BR_RECONFIGURE_PORTS, NO_PRIORITY);
-
-    VLOG_INFO("[%s] Registering in BLK_VRF_RECONFIGURE_PORTS", QOS_PLUGIN_NAME);
-    register_reconfigure_callback(&qos_callback_reconfigure_vrf,
-                                  BLK_VRF_RECONFIGURE_PORTS, NO_PRIORITY);
-
-    for (int blk_id = 0; blk_id < (int)MAX_STATS_BLOCKS_NUM; blk_id++) {
-        switch (blk_id) {
-        case STATS_PER_BRIDGE_NETDEV:
-        case STATS_PER_VRF_NETDEV:
-        case STATS_PER_SUBSYSTEM_NETDEV:
-            VLOG_INFO("[%s] Registering STATS_PER_xxx_NETDEV", QOS_PLUGIN_NAME);
-            register_stats_callback(&qos_callback_statistics_netdev,
-                                    blk_id, NO_PRIORITY);
-            break;
-        case STATS_BRIDGE_CREATE_NETDEV:
-        case STATS_SUBSYSTEM_CREATE_NETDEV:
-            VLOG_INFO("[%s] Registering STATS_xxx_CREATE_NETDEV", QOS_PLUGIN_NAME);
-            register_stats_callback(&qos_callback_statistics_create_netdev,
-                                    blk_id, NO_PRIORITY);
-            break;
-
-        default:
-#ifdef QOS_STATS_DEBUG
-            VLOG_INFO("[%s] Registering STATS block %d", QOS_PLUGIN_NAME, blk_id);
-            register_stats_callback(&qos_callback_statistics_default, blk_id, NO_PRIORITY);
-#endif
-            break;
-        }
-    }
-
-    return ret;
-}
 
 /* converts enum in qos_trust SMAP into enum value */
 enum qos_trust get_qos_trust_value(const struct smap *cfg) {
@@ -234,36 +184,88 @@ int ofproto_apply_qos_profile(struct ofproto *ofproto,
     return rv;
 }
 
-/* bridge_run-related operations go here. */
-/* first time only -- connect to ASIC provider (plugin extension). */
-int run(void)
+/* Initialization (called once) - register for callbacks. */
+int init(int phase_id)
 {
-    int rv;
+    int ret = 0;
 
-    if (! plugin_init_done) {
-        /**
-         * Initialize the QOS API -- it will find its ASIC provider APIs.
-         *
-         * Must run after ASIC provider plugin initializes, therefore must
-         * be called in the "run loop", as there is no "after all plugins
-         * are initialized" callback.
-         */
-        rv = find_plugin_extension(QOS_ASIC_PLUGIN_INTERFACE_NAME,
-                                   QOS_ASIC_PLUGIN_INTERFACE_MAJOR,
-                                   QOS_ASIC_PLUGIN_INTERFACE_MINOR,
-                                   &extension);
-        if (rv == 0) {
-            VLOG_DBG("Found [%s] plugin extension...", QOS_PLUGIN_NAME);
-            plugin = (struct qos_asic_plugin_interface *)extension->plugin_interface;
-            plugin_init_done = true;
-        }
-        else {
-            VLOG_WARN("%s (v%d.%d) not found", QOS_ASIC_PLUGIN_INTERFACE_NAME,
-                      QOS_ASIC_PLUGIN_INTERFACE_MAJOR,
-                      QOS_ASIC_PLUGIN_INTERFACE_MINOR);
+    /**
+     * Initialize the QOS API -- it will find its ASIC provider APIs.
+     *
+     * Must run after ASIC provider plugin initializes
+     * Plugin load order is configured in plugins.yaml file
+     * in ops-hw-config platform-dependent directory.
+     */
+    ret = find_plugin_extension(QOS_ASIC_PLUGIN_INTERFACE_NAME,
+                                QOS_ASIC_PLUGIN_INTERFACE_MAJOR,
+                                QOS_ASIC_PLUGIN_INTERFACE_MINOR,
+                                &extension);
+    if (ret == 0) {
+        VLOG_DBG("Found [%s] plugin extension...", QOS_PLUGIN_NAME);
+        plugin = (struct qos_asic_plugin_interface *)extension->plugin_interface;
+    }
+    else {
+        VLOG_WARN("%s (v%d.%d) not found", QOS_ASIC_PLUGIN_INTERFACE_NAME,
+                  QOS_ASIC_PLUGIN_INTERFACE_MAJOR,
+                  QOS_ASIC_PLUGIN_INTERFACE_MINOR);
+    }
+
+    VLOG_INFO("[%s] Registering BLK_BRIDGE_INIT", QOS_PLUGIN_NAME);
+    register_reconfigure_callback(&qos_callback_bridge_init,
+                                  BLK_BRIDGE_INIT, QOS_PRIORITY);
+
+    VLOG_INFO("[%s] Registering in BLK_INIT_RECONFIGURE", QOS_PLUGIN_NAME);
+    register_reconfigure_callback(&qos_callback_init_reconfigure,
+                                  BLK_INIT_RECONFIGURE, QOS_PRIORITY);
+
+    VLOG_INFO("[%s] Registering in BLK_BR_PORT_UPDATE", QOS_PLUGIN_NAME);
+    register_reconfigure_callback(&qos_callback_bridge_port_update,
+                                  BLK_BR_PORT_UPDATE, QOS_PRIORITY);
+
+    VLOG_INFO("[%s] Registering in BLK_VRF_PORT_UPDATE", QOS_PLUGIN_NAME);
+    register_reconfigure_callback(&qos_callback_vrf_port_update,
+                                  BLK_VRF_PORT_UPDATE, QOS_PRIORITY);
+
+    VLOG_INFO("[%s] Registering in BLK_BR_FEATURE_RECONFIG", QOS_PLUGIN_NAME);
+    register_reconfigure_callback(&qos_callback_bridge_feature_reconfig,
+                                  BLK_BR_FEATURE_RECONFIG, QOS_PRIORITY);
+
+    VLOG_INFO("[%s] Registering in BLK_RECONFIGURE_NEIGHBORS", QOS_PLUGIN_NAME);
+    register_reconfigure_callback(&qos_callback_reconfigure_neighbors,
+                                  BLK_RECONFIGURE_NEIGHBORS, QOS_PRIORITY);
+
+    for (int blk_id = 0; blk_id < (int)MAX_STATS_BLOCKS_NUM; blk_id++) {
+        switch (blk_id) {
+        case STATS_PER_BRIDGE_NETDEV:
+        case STATS_PER_VRF_NETDEV:
+        case STATS_PER_SUBSYSTEM_NETDEV:
+            VLOG_INFO("[%s] Registering STATS_PER_xxx_NETDEV", QOS_PLUGIN_NAME);
+            register_stats_callback(&qos_callback_statistics_netdev,
+                                    blk_id, QOS_PRIORITY);
+            break;
+        case STATS_BRIDGE_CREATE_NETDEV:
+        case STATS_SUBSYSTEM_CREATE_NETDEV:
+            VLOG_INFO("[%s] Registering STATS_xxx_CREATE_NETDEV", QOS_PLUGIN_NAME);
+            register_stats_callback(&qos_callback_statistics_create_netdev,
+                                    blk_id, QOS_PRIORITY);
+            break;
+
+        default:
+#ifdef QOS_STATS_DEBUG
+            VLOG_INFO("[%s] Registering STATS block %d", QOS_PLUGIN_NAME, blk_id);
+            register_stats_callback(&qos_callback_statistics_default, blk_id, QOS_PRIORITY);
+#endif
+            break;
         }
     }
 
+    return ret;
+}
+
+/* bridge_run-related operations go here. */
+int run(void)
+{
+    /* Nothing to do. */
     return 0;
 }
 

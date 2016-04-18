@@ -25,12 +25,15 @@
 #define QOS_PLUGIN_NAME    "QOS" //Do not change this name
 
 
+#define QOS_PRIORITY 1000   /* TODO: When review 7337 approved, change to NO_PRIORITY. */
+
 /* bridge_reconfigure callback functions (registered by qos_plugin:init) */
-void qos_configure(struct ofproto *, struct ovsdb_idl *, unsigned int);
-void qos_callback_init(struct blk_params *);
-void qos_callback_reconfigure_init(struct blk_params *);
-void qos_callback_reconfigure_bridge(struct blk_params *);
-void qos_callback_reconfigure_vrf(struct blk_params *);
+void qos_callback_bridge_init(struct blk_params *);
+void qos_callback_init_reconfigure(struct blk_params *);
+void qos_callback_bridge_port_update(struct blk_params *);
+void qos_callback_bridge_feature_reconfig(struct blk_params *);
+void qos_callback_vrf_port_update(struct blk_params *);
+void qos_callback_reconfigure_neighbors(struct blk_params *);
 
 /* Configuration of QOS tables. */
 enum qos_trust get_qos_trust_value(const struct smap *);

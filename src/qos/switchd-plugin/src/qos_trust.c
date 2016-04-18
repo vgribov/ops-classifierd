@@ -34,16 +34,16 @@ static bool global_trust_changed = false;
 
 
 /**
- * Configure global QOS trust setting.
+ * Check global QOS trust setting.
  *   Keeps track of global QOS trust value.
- *
- *   Called from bridge reconfigure at the start of its processing.
+ *   Sets internal "global trust changed" flag that is used when looping
+ *      all the Ports in a Bridge or VRF.
  *
  * @param idl       - pointer to IDL
  * @param idl_seqno - current transaction sequence number
  */
 void
-qos_configure_trust(struct ovsdb_idl *idl, unsigned int idl_seqno)
+qos_check_if_global_trust_changed(struct ovsdb_idl *idl, unsigned int idl_seqno)
 {
     enum qos_trust qos_trust;
     const struct ovsrec_system *ovs_row = NULL;
@@ -100,11 +100,16 @@ qos_trust_send_change(struct ofproto *ofproto,
     if (send_trust_change ||
         OVSREC_IDL_IS_ROW_MODIFIED(port_cfg, idl_seqno)) {
 
-        VLOG_DBG("%s: port %s TRUST change", __FUNCTION__, port_cfg->name);
-        ofproto_set_port_qos_cfg(ofproto,
-                                 aux,
-                                 global_qos_trust,
-                                 &port_cfg->qos_config,
-                                 &port_cfg->other_config);
+        /* Make sure this port has interfaces that are 'system' type.
+           QoS should not affect other types. */
+        if ( ! strcmp(port_cfg->interfaces[0]->type,
+                      OVSREC_INTERFACE_TYPE_SYSTEM)) {
+            VLOG_DBG("%s: port %s TRUST change", __FUNCTION__, port_cfg->name);
+            ofproto_set_port_qos_cfg(ofproto,
+                                     aux,
+                                     global_qos_trust,
+                                     &port_cfg->qos_config,
+                                     &port_cfg->other_config);
+        }
     }
 }

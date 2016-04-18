@@ -21,7 +21,9 @@
 #include "vswitch-idl.h"
 #include "ofproto/ofproto-provider.h"
 
-void qos_configure_cos_map(struct ofproto *, struct ovsdb_idl *, unsigned int);
-void qos_configure_dscp_map(struct ofproto *, struct ovsdb_idl *, unsigned int);
+void qos_configure_global_cos_map(struct ofproto *,
+                                  struct ovsdb_idl *, unsigned int);
+void qos_configure_global_dscp_map(struct ofproto *,
+                                   struct ovsdb_idl *, unsigned int);
 
 #endif /* _QOS_MAP_H_ */
