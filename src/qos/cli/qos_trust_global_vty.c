@@ -84,7 +84,7 @@ qos_trust_global_command(const char *qos_trust_name)
 DEFUN(qos_trust_global,
         qos_trust_global_cmd,
         "qos trust (none|cos|dscp)",
-        "Configure QoS\n"
+        QOS_HELP_STRING
         "Set the top-level QoS Trust Mode configuration\n"
         "Do not trust any priority fields, and remark \
 all of them to 0 (Default)\n"
@@ -121,7 +121,7 @@ DEFUN(qos_trust_global_no,
         qos_trust_global_no_cmd,
         "no qos trust {none|cos|dscp}",
         NO_STR
-        "Configure QoS\n"
+        QOS_HELP_STRING
         "Restore the top-level QoS Trust Mode to its factory default\n"
         "Do not trust any priority fields, and \
 remark all of them to 0 (Default)\n"

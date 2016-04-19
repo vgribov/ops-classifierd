@@ -119,7 +119,7 @@ DEFUN(qos_dscp_map_cos_remark_disabled,
         qos_dscp_map_cos_remark_disabled_cmd,
         "qos dscp-map <0-63> local-priority <0-7>\
  {color (green|yellow|red) | name STRING}",
-        "Configure QoS\n"
+        QOS_HELP_STRING
         "Configure QoS DSCP Map\n"
         "The QoS DSCP Map code point\n"
         "Configure QoS DSCP Map local-priority\n"
@@ -163,7 +163,7 @@ DEFUN(qos_dscp_map,
         qos_dscp_map_cmd,
         "qos dscp-map <0-63> local-priority <0-7>\
  {cos <0-7> | color (green|yellow|red) | name STRING}",
-        "Configure QoS\n"
+        QOS_HELP_STRING
         "Configure QoS DSCP Map\n"
         "The QoS DSCP Map code point\n"
         "Configure QoS DSCP Map local-priority\n"
@@ -258,7 +258,7 @@ DEFUN(qos_dscp_map_no,
         "no qos dscp-map <0-63> {local-priority <0-7> | cos <0-7>\
  | color (green|yellow|red) | name STRING}",
         NO_STR
-        "Configure QoS\n"
+        QOS_HELP_STRING
         "Restore the QoS DSCP Map values for a given\
  code point to their factory default\n"
         "The QoS DSCP Map code point\n"

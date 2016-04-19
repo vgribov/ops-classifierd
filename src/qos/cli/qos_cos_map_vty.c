@@ -111,7 +111,7 @@ DEFUN(qos_cos_map,
         qos_cos_map_cmd,
         "qos cos-map <0-7> local-priority <0-7>\
  {color (green|yellow|red) | name STRING}",
-        "Configure QoS\n"
+        QOS_HELP_STRING
         "Configure QoS COS Map\n"
         "The QoS COS Map code point\n"
         "Configure QoS COS Map local-priority\n"
@@ -183,7 +183,7 @@ DEFUN(qos_cos_map_no,
         "no qos cos-map <0-7> {local-priority <0-7>\
  | color (green|yellow|red) | name STRING}",
         NO_STR
-        "Configure QoS\n"
+        QOS_HELP_STRING
         "Restore the QoS COS Map values for a given\
  code point to their factory default\n"
         "The QoS COS Map code point\n"

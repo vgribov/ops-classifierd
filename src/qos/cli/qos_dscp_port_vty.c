@@ -105,7 +105,7 @@ qos_dscp_port_command(const char *port_name,
 DEFUN(qos_dscp_port,
         qos_dscp_port_cmd,
         "qos dscp <0-63>",
-        "Configure QoS\n"
+        QOS_HELP_STRING
         "Set the DSCP override for the port\n"
         "The index into the DSCP Map\n")
 {
@@ -177,7 +177,7 @@ DEFUN(qos_dscp_port_no,
         qos_dscp_port_no_cmd,
         "no qos dscp {<0-63>}",
         NO_STR
-        "Configure QoS\n"
+        QOS_HELP_STRING
         "Remove the QoS DSCP override for the port\n"
         "The index into the DSCP Map\n")
 {

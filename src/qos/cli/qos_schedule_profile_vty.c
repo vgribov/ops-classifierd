@@ -363,7 +363,7 @@ qos_schedule_profile_command_commit(const char *profile_name)
 DEFUN(qos_schedule_profile,
         qos_schedule_profile_cmd,
        "qos schedule-profile NAME",
-       "Configure QoS\n"
+       QOS_HELP_STRING
        "Set the QoS Schedule Profile configuration\n"
        "The name of the Schedule Profile\n")
 {
@@ -514,7 +514,7 @@ DEFUN(qos_schedule_profile_no,
         qos_schedule_profile_no_cmd,
         "no qos schedule-profile NAME",
         NO_STR
-        "Configure QoS\n"
+        QOS_HELP_STRING
         "Deletes a Schedule Profile, if it is not currently applied\n"
         "The name of the Schedule Profile to delete\n")
 {

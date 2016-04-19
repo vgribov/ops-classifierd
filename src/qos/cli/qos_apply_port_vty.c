@@ -151,7 +151,7 @@ DEFUN(qos_apply_port,
         qos_apply_port_cmd,
         "apply qos schedule-profile NAME",
         "Apply a configuration\n"
-        "Configure QoS\n"
+        QOS_HELP_STRING
         "The schedule-profile to apply\n"
         "The schedule-profile to apply\n")
 {
@@ -180,7 +180,7 @@ DEFUN
         qos_apply_port_strict_cmd,
         "apply qos schedule-profile strict",
         "Apply a configuration\n"
-        "Configure QoS\n"
+        QOS_HELP_STRING
         "The schedule-profile to apply\n"
         "Use the strict schedule profile which has all queues\
  configured to use the strict algorithm\n")
@@ -254,7 +254,7 @@ DEFUN(qos_apply_port_no,
         "no apply qos schedule-profile {NAME}",
         NO_STR
         "Apply a configuration\n"
-        "Configure QoS\n"
+        QOS_HELP_STRING
         "Clears the schedule profile\n"
         "The name of the schedule profile\n")
 {

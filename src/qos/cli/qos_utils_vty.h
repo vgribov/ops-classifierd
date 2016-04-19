@@ -21,6 +21,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+#define QOS_HELP_STRING "Quality of Service configuration\n"
+
 #define QOS_INVALID_STRING_ERROR_MESSAGE \
 "This field can have a length up to 64 characters.\n\
 The allowed characters are alphanumeric, underscore ('_'),\n\

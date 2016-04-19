@@ -120,7 +120,7 @@ qos_trust_port_command(const char *port_name,
 DEFUN(qos_trust_port,
         qos_trust_port_cmd,
         "qos trust (none|cos|dscp)",
-        "Configure QoS\n"
+        QOS_HELP_STRING
         "Set the QoS Trust Mode configuration for the port\n"
         "Do not trust any priority fields, and \
 remark all of them to 0 (Default)\n"
@@ -195,7 +195,7 @@ DEFUN(qos_trust_port_no,
         qos_trust_port_no_cmd,
         "no qos trust {none|cos|dscp}",
         NO_STR
-        "Configure QoS\n"
+        QOS_HELP_STRING
         "Remove the QoS Trust Mode configuration for the port\n"
         "Do not trust any priority fields, and \
 remark all of them to 0 (Default)\n"

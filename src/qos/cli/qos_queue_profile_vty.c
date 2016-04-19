@@ -355,7 +355,7 @@ qos_queue_profile_command_commit(const char *profile_name)
 DEFUN(qos_queue_profile,
         qos_queue_profile_cmd,
        "qos queue-profile NAME",
-       "Configure QoS\n"
+       QOS_HELP_STRING
        "Set the QoS Queue Profile configuration\n"
        "The name of the Queue Profile\n")
 {
@@ -510,7 +510,7 @@ DEFUN(qos_queue_profile_no,
         qos_queue_profile_no_cmd,
         "no qos queue-profile NAME",
         NO_STR
-        "Configure QoS\n"
+        QOS_HELP_STRING
         "Deletes a Queue Profile, if it is not currently applied\n"
         "The name of the Queue Profile to delete\n")
 {

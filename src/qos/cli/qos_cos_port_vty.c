@@ -106,7 +106,7 @@ qos_cos_port_command(const char *port_name,
 DEFUN(qos_cos_port,
         qos_cos_port_cmd,
         "qos cos <0-7>",
-        "Configure QoS\n"
+        QOS_HELP_STRING
         "Set the COS override for the port\n"
         "The index into the COS Map\n")
 {
@@ -178,7 +178,7 @@ DEFUN(qos_cos_port_no,
         qos_cos_port_no_cmd,
         "no qos cos {<0-7>}",
         NO_STR
-        "Configure QoS\n"
+        QOS_HELP_STRING
         "Remove the QoS COS override for the port\n"
         "The index into the COS Map\n")
 {
