@@ -406,6 +406,91 @@ class Test_qos_cli():
         self.s1.cmdCLI('no qos schedule-profile default')
         out = self.s1.cmdCLI('do show qos schedule-profile default')
         assert '0         strict' not in out
+
+    def test_qosApplyGlobalCommandWithPortScheduleProfileWithDifferentQueues(
+            self):
+        # Create profiles with just one queue.
+        self.s1.cmdCLI('no qos queue-profile p2')
+        self.s1.cmdCLI('qos queue-profile p2')
+        self.s1.cmdCLI('map queue 0 local-priority 0')
+        self.s1.cmdCLI('map queue 0 local-priority 1')
+        self.s1.cmdCLI('map queue 0 local-priority 2')
+        self.s1.cmdCLI('map queue 0 local-priority 3')
+        self.s1.cmdCLI('map queue 0 local-priority 4')
+        self.s1.cmdCLI('map queue 0 local-priority 5')
+        self.s1.cmdCLI('map queue 0 local-priority 6')
+        self.s1.cmdCLI('map queue 0 local-priority 7')
+        self.s1.cmdCLI('exit')
+
+        self.s1.cmdCLI('no qos schedule-profile p2')
+        self.s1.cmdCLI('qos schedule-profile p2')
+        self.s1.cmdCLI('strict queue 0')
+        self.s1.cmdCLI('exit')
+
+        # Apply the one-queue profiles to system and port.
+        self.s1.cmdCLI('apply qos queue-profile p2 schedule-profile p2')
+        self.s1.cmdCLI('interface 1')
+        self.s1.cmdCLI('apply qos schedule-profile p2')
+        self.s1.cmdCLI('exit')
+
+        # Globally applying the default profiles should fail, since they
+        # have 8 queues rather than 1 queue.
+        out = self.s1.cmdCLI('apply qos queue-profile ' + \
+                            'default schedule-profile default')
+        assert 'schedule profile applied on port' in out
+        assert 'cannot contain different queues' in out
+
+        # Un-apply the one-queue profiles.
+        self.s1.cmdCLI('interface 1')
+        self.s1.cmdCLI('no apply qos schedule-profile')
+        self.s1.cmdCLI('exit')
+        self.s1.cmdCLI('apply qos queue-profile default ' + \
+                       'schedule-profile default')
+
+    def test_qosApplyGlobalCommandWithPortScheduleProfileStrict(
+            self):
+        # Create profiles with just one queue.
+        self.s1.cmdCLI('no qos queue-profile p2')
+        self.s1.cmdCLI('qos queue-profile p2')
+        self.s1.cmdCLI('map queue 0 local-priority 0')
+        self.s1.cmdCLI('map queue 0 local-priority 1')
+        self.s1.cmdCLI('map queue 0 local-priority 2')
+        self.s1.cmdCLI('map queue 0 local-priority 3')
+        self.s1.cmdCLI('map queue 0 local-priority 4')
+        self.s1.cmdCLI('map queue 0 local-priority 5')
+        self.s1.cmdCLI('map queue 0 local-priority 6')
+        self.s1.cmdCLI('map queue 0 local-priority 7')
+        self.s1.cmdCLI('exit')
+
+        self.s1.cmdCLI('no qos schedule-profile p2')
+        self.s1.cmdCLI('qos schedule-profile p2')
+        self.s1.cmdCLI('strict queue 0')
+        self.s1.cmdCLI('exit')
+
+        # Apply the one-queue profiles to system.
+        self.s1.cmdCLI('apply qos queue-profile p2 schedule-profile p2')
+
+        # Apply strict to port.
+        self.s1.cmdCLI('interface 1')
+        self.s1.cmdCLI('apply qos schedule-profile strict')
+        self.s1.cmdCLI('exit')
+
+        # Globally applying the default profiles should succeed, since the
+        # port schedule profile is just strict.
+        out = self.s1.cmdCLI('apply qos queue-profile ' + \
+                            'default schedule-profile default')
+        out = self.s1.cmdCLI('do show qos queue-profile')
+        assert 'applied        default' in out
+        out = self.s1.cmdCLI('do show qos schedule-profile')
+        assert 'applied        default' in out
+
+        # Un-apply the one-queue profiles.
+        self.s1.cmdCLI('interface 1')
+        self.s1.cmdCLI('no apply qos schedule-profile')
+        self.s1.cmdCLI('exit')
+        self.s1.cmdCLI('apply qos queue-profile default ' + \
+                       'schedule-profile default')
+
         self.setUp_qosApplyGlobal()
 
     def test_qosApplyPortCommand(self):

@@ -49,6 +49,14 @@ qos_profiles_contain_same_queues(
         struct ovsrec_q_profile * queue_profile_row,
         struct ovsrec_qos *schedule_profile_row)
 {
+    /* The strict schedule profile is unique in that it has no queues.
+     * Return true, since the strict schedule profile is compatible with any
+     * queue profile. */
+    if (strncmp(schedule_profile_row->name, OVSREC_QUEUE_ALGORITHM_STRICT,
+            QOS_CLI_STRING_BUFFER_SIZE) == 0) {
+        return true;
+    }
+
     /* Check that each queue profile queue_num is in the schedule profile. */
     int i;
     for (i = 0; i < queue_profile_row->n_q_profile_entries; i++) {
