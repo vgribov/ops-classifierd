@@ -168,7 +168,7 @@ qos_get_schedule_algorithm(char *db_algorithm)
  */
 static struct schedule_profile_settings *
 qos_get_schedule_profile_settings(const struct ovsrec_qos *ovsrec_qos,
-                                  int n_queues)
+                                  const struct ovsrec_q_profile *ovsrec_q_profile)
 {
     struct schedule_profile_settings *settings;
     const struct ovsrec_queue *ovsrec_queue;
@@ -182,14 +182,19 @@ qos_get_schedule_profile_settings(const struct ovsrec_qos *ovsrec_qos,
     VLOG_DBG("%s %s %d", __FUNCTION__,
              ovsrec_qos->name, settings->n_entries);
     if (!strcmp(ovsrec_qos->name, OVSREC_QUEUE_ALGORITHM_STRICT)) {
-        settings->n_entries = n_queues;
+        /*
+         * Because 'strict' schedule profile in database (ovsrec_qos) has
+         * no queues defined, use queue numbering from the queue profile.
+         */
+        settings->n_entries = ovsrec_q_profile->n_q_profile_entries;
         settings->entries = malloc(settings->n_entries * sizeof(void *));
 
         /* 'strict' profile - synthesize a schedule profile. */
-        for (q_index = 0; q_index < n_queues; q_index++) {
+        for (q_index = 0; q_index < settings->n_entries; q_index++) {
             /* set each profile entry to the same 'strict' entry. */
             sp_entry = calloc(1, sizeof(struct schedule_profile_entry));
-            sp_entry->queue = (unsigned)ovsrec_qos->key_queues[q_index];
+            sp_entry->queue =
+                (unsigned)ovsrec_q_profile->key_q_profile_entries[q_index];
             settings->entries[q_index] = sp_entry;
 
             sp_entry->algorithm = ALGORITHM_STRICT;
@@ -269,7 +274,7 @@ qos_apply_profile(struct ofproto *ofproto,
     schedule_settings = NULL;
     if (ovsrec_qos) {
         schedule_settings = qos_get_schedule_profile_settings(ovsrec_qos,
-                                                  queue_settings->n_entries);
+                                                              ovsrec_q_profile);
     }
 
     status = ofproto_apply_qos_profile(ofproto, aux,
@@ -438,6 +443,25 @@ qos_configure_port_profiles(struct ofproto *ofproto,
     if (strcmp(port_cfg->interfaces[0]->type, OVSREC_INTERFACE_TYPE_SYSTEM)) {
         /* Return if not system */
         return;
+    }
+
+    /*
+     * This function is called:
+     * 1. from port-update callback when a single Port row is modified
+     * 2. from reconfigure-feature callback after the port_configure loop
+     *      completes.
+     * If #1, this call could be due to LAG membership change.  If so, we
+     * must "force-update" port profiles, whether or not the applied profile
+     * has changed -- because the PD must apply the change to the new LAG
+     * members.
+
+     * To avoid unnecessary profile updates, first check if the interface
+     * list changed.  If no Port row's interface column changed, then this
+     * port-update cannot be a LAG change.  Therefore, we can revert to
+     * normal behavior -- and update only if the profile has changed
+     */
+    if ( ! OVSREC_IDL_IS_COLUMN_MODIFIED(ovsrec_port_col_interfaces, idl_seqno)) {
+        force_update = false;
     }
 
     ovs_row = ovsrec_system_first(idl);

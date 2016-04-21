@@ -25,7 +25,7 @@
 #define QOS_PLUGIN_NAME    "QOS" //Do not change this name
 
 
-#define QOS_PRIORITY 1000   /* TODO: When review 7337 approved, change to NO_PRIORITY. */
+#define QOS_PRIORITY        NO_PRIORITY
 
 /* bridge_reconfigure callback functions (registered by qos_plugin:init) */
 void qos_callback_bridge_init(struct blk_params *);

@@ -71,5 +71,4 @@ install(TARGETS ${LIB_NAME}
   LIBRARY DESTINATION lib/openvswitch/plugins)
 
 install(FILES
-	${PROJECT_SOURCE_DIR}/${INCLUDE_DIR}/qos_plugin.h
 	DESTINATION include/plugins)

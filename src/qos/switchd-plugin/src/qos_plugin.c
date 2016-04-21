@@ -34,6 +34,9 @@
 #include "smap.h"
 #include "stats-blocks.h"
 #include "vswitch-idl.h"
+#ifdef QOS_DEBUG
+#include "bridge.h"
+#endif
 
 VLOG_DEFINE_THIS_MODULE(qos_plugin);
 
@@ -164,8 +167,14 @@ int ofproto_apply_qos_profile(struct ofproto *ofproto,
                               const struct queue_profile_settings *q_settings) {
     int rv = 0;
 
+#ifndef QOS_DEBUG
     VLOG_DBG("%s aux=%p settings=%p,%p", __FUNCTION__, aux,
              s_settings, q_settings);
+#else
+    VLOG_DBG("%s aux=%p (%s) settings=%p,%p", __FUNCTION__, aux,
+             (aux) ? ((struct port *)aux)->name : "global",
+             s_settings, q_settings);
+#endif
 
     if (plugin == NULL) {
         return EOPNOTSUPP;
@@ -201,7 +210,7 @@ int init(int phase_id)
                                 QOS_ASIC_PLUGIN_INTERFACE_MINOR,
                                 &extension);
     if (ret == 0) {
-        VLOG_DBG("Found [%s] plugin extension...", QOS_PLUGIN_NAME);
+        VLOG_INFO("Found [%s] plugin extension...", QOS_PLUGIN_NAME);
         plugin = (struct qos_asic_plugin_interface *)extension->plugin_interface;
     }
     else {
@@ -210,27 +219,27 @@ int init(int phase_id)
                   QOS_ASIC_PLUGIN_INTERFACE_MINOR);
     }
 
-    VLOG_INFO("[%s] Registering BLK_BRIDGE_INIT", QOS_PLUGIN_NAME);
+    VLOG_DBG("[%s] Registering BLK_BRIDGE_INIT", QOS_PLUGIN_NAME);
     register_reconfigure_callback(&qos_callback_bridge_init,
                                   BLK_BRIDGE_INIT, QOS_PRIORITY);
 
-    VLOG_INFO("[%s] Registering in BLK_INIT_RECONFIGURE", QOS_PLUGIN_NAME);
+    VLOG_DBG("[%s] Registering in BLK_INIT_RECONFIGURE", QOS_PLUGIN_NAME);
     register_reconfigure_callback(&qos_callback_init_reconfigure,
                                   BLK_INIT_RECONFIGURE, QOS_PRIORITY);
 
-    VLOG_INFO("[%s] Registering in BLK_BR_PORT_UPDATE", QOS_PLUGIN_NAME);
+    VLOG_DBG("[%s] Registering in BLK_BR_PORT_UPDATE", QOS_PLUGIN_NAME);
     register_reconfigure_callback(&qos_callback_bridge_port_update,
                                   BLK_BR_PORT_UPDATE, QOS_PRIORITY);
 
-    VLOG_INFO("[%s] Registering in BLK_VRF_PORT_UPDATE", QOS_PLUGIN_NAME);
+    VLOG_DBG("[%s] Registering in BLK_VRF_PORT_UPDATE", QOS_PLUGIN_NAME);
     register_reconfigure_callback(&qos_callback_vrf_port_update,
                                   BLK_VRF_PORT_UPDATE, QOS_PRIORITY);
 
-    VLOG_INFO("[%s] Registering in BLK_BR_FEATURE_RECONFIG", QOS_PLUGIN_NAME);
+    VLOG_DBG("[%s] Registering in BLK_BR_FEATURE_RECONFIG", QOS_PLUGIN_NAME);
     register_reconfigure_callback(&qos_callback_bridge_feature_reconfig,
                                   BLK_BR_FEATURE_RECONFIG, QOS_PRIORITY);
 
-    VLOG_INFO("[%s] Registering in BLK_RECONFIGURE_NEIGHBORS", QOS_PLUGIN_NAME);
+    VLOG_DBG("[%s] Registering in BLK_RECONFIGURE_NEIGHBORS", QOS_PLUGIN_NAME);
     register_reconfigure_callback(&qos_callback_reconfigure_neighbors,
                                   BLK_RECONFIGURE_NEIGHBORS, QOS_PRIORITY);
 
@@ -239,20 +248,20 @@ int init(int phase_id)
         case STATS_PER_BRIDGE_NETDEV:
         case STATS_PER_VRF_NETDEV:
         case STATS_PER_SUBSYSTEM_NETDEV:
-            VLOG_INFO("[%s] Registering STATS_PER_xxx_NETDEV", QOS_PLUGIN_NAME);
+            VLOG_DBG("[%s] Registering STATS_PER_xxx_NETDEV", QOS_PLUGIN_NAME);
             register_stats_callback(&qos_callback_statistics_netdev,
                                     blk_id, QOS_PRIORITY);
             break;
         case STATS_BRIDGE_CREATE_NETDEV:
         case STATS_SUBSYSTEM_CREATE_NETDEV:
-            VLOG_INFO("[%s] Registering STATS_xxx_CREATE_NETDEV", QOS_PLUGIN_NAME);
+            VLOG_DBG("[%s] Registering STATS_xxx_CREATE_NETDEV", QOS_PLUGIN_NAME);
             register_stats_callback(&qos_callback_statistics_create_netdev,
                                     blk_id, QOS_PRIORITY);
             break;
 
         default:
 #ifdef QOS_STATS_DEBUG
-            VLOG_INFO("[%s] Registering STATS block %d", QOS_PLUGIN_NAME, blk_id);
+            VLOG_DBG("[%s] Registering STATS block %d", QOS_PLUGIN_NAME, blk_id);
             register_stats_callback(&qos_callback_statistics_default, blk_id, QOS_PRIORITY);
 #endif
             break;
