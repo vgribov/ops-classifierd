@@ -83,7 +83,7 @@ void init(void) {
         COPP_ASIC_PLUGIN_INTERFACE_MINOR,
         &asic_intf);
     if (rc) {
-        VLOG_WARN("%s (v%d.%d) not found", COPP_ASIC_PLUGIN_INTERFACE_NAME,
+        VLOG_INFO("%s (v%d.%d) not found", COPP_ASIC_PLUGIN_INTERFACE_NAME,
             COPP_ASIC_PLUGIN_INTERFACE_MAJOR,
             COPP_ASIC_PLUGIN_INTERFACE_MINOR);
         return;
@@ -92,7 +92,7 @@ void init(void) {
     /* register our callback on BLK_BRIDGE_INIT. */
     rc = register_reconfigure_callback(copp_stats_brinit_cb, BLK_BRIDGE_INIT, COPP_PLUGIN_PRIORITY);
     if (rc) {
-        VLOG_WARN("Failed to register for switchd bridge configure_init plugin");
+        VLOG_INFO("Failed to register for switchd bridge configure_init plugin");
         g_copp_asic_plugin.plugin_interface = NULL;
         g_copp_initialized = false;
         return;
@@ -101,7 +101,7 @@ void init(void) {
     /* register our callback on STATS_PER_BRIDGE. */
     rc = register_stats_callback(copp_stats_cb, STATS_PER_BRIDGE, COPP_PLUGIN_PRIORITY);
     if (rc) {
-        VLOG_WARN("Failed to register for switchd stats plugin");
+        VLOG_INFO("Failed to register for switchd stats plugin");
         g_copp_asic_plugin.plugin_interface = NULL;
         g_copp_initialized = false;
         return;
@@ -149,7 +149,7 @@ copp_stats_brinit_cb(struct blk_params* cblk) {
         g_copp_initialized = true;
      }
      else
-         VLOG_WARN("failed to initialize copp_stats_cb()");
+         VLOG_INFO("failed to initialize copp_stats_cb()");
 }
 
 
@@ -230,7 +230,7 @@ copp_stats_cb(struct stats_blk_params *sblk, enum stats_block_id blk_id) {
             switch(rc) {
                 case EOPNOTSUPP :
                     if (g_copp_stats_log_info[class].no_supp == false ) {
-                        VLOG_WARN("copp_stats_get for class %d returned %d %s",
+                        VLOG_INFO("copp_stats_get for class %d returned %d %s",
                             class, rc, strerror(rc));
 
                         /* The first time we encounter NOTSUPP, we remove this
@@ -245,13 +245,13 @@ copp_stats_cb(struct stats_blk_params *sblk, enum stats_block_id blk_id) {
                     break;
                 case EINVAL :
                     if (g_copp_stats_log_info[class].inval == false ) {
-                        VLOG_WARN("copp_stats_get for class %d returned %d %s",
+                        VLOG_INFO("copp_stats_get for class %d returned %d %s",
                             class, rc, strerror(rc));
                         g_copp_stats_log_info[class].inval= true;
                     }
                     break;
                 default:
-                    VLOG_WARN("copp_stats_get for class %d returned"
+                    VLOG_INFO("copp_stats_get for class %d returned"
                         "unrecognized %d %s", class, rc, strerror(rc));
             }
 
@@ -273,7 +273,7 @@ copp_stats_cb(struct stats_blk_params *sblk, enum stats_block_id blk_id) {
                          * collecing those stats. Could happen on first pass
                          * I suppose.
                          */
-                        VLOG_WARN("copp_hw_status_get for class %d returned"
+                        VLOG_INFO("copp_hw_status_get for class %d returned"
                         " %d %s", class, rc, strerror(rc));
                         g_copp_status_log_info[class].no_supp = true;
 
@@ -284,7 +284,7 @@ copp_stats_cb(struct stats_blk_params *sblk, enum stats_block_id blk_id) {
                     break;
                 case ENOSPC:
                     if (g_copp_status_log_info[class].no_spc== false ) {
-                        VLOG_WARN("copp_hw_status_get for class %d returned "
+                        VLOG_INFO("copp_hw_status_get for class %d returned "
                             "%d %s", class, rc, strerror(rc));
                         g_copp_status_log_info[class].no_spc= true;
                         /* ok to publish class into db row in this case */
@@ -292,7 +292,7 @@ copp_stats_cb(struct stats_blk_params *sblk, enum stats_block_id blk_id) {
                     break;
                 case EIO:
                     if (g_copp_status_log_info[class].io == false ) {
-                        VLOG_WARN("copp_hw_status_get for class %d returned "
+                        VLOG_INFO("copp_hw_status_get for class %d returned "
                             "%d %s", class, rc, strerror(rc));
                         g_copp_status_log_info[class].io = true;
                         /* ok to publish class into db row in this case */
@@ -300,7 +300,7 @@ copp_stats_cb(struct stats_blk_params *sblk, enum stats_block_id blk_id) {
                     break;
                 case EINVAL:
                     if (g_copp_status_log_info[class].inval == false ) {
-                        VLOG_WARN("copp_hw_status_get for class %d returned "
+                        VLOG_INFO("copp_hw_status_get for class %d returned "
                             "%d %s", class, rc, strerror(rc));
                         g_copp_status_log_info[class].inval= true;
                         /* give up on both stats and status for this class */
@@ -309,7 +309,7 @@ copp_stats_cb(struct stats_blk_params *sblk, enum stats_block_id blk_id) {
                     }
                     break;
                 default:
-                    VLOG_WARN("copp_hw_status_get() for class %d returned "
+                    VLOG_INFO("copp_hw_status_get() for class %d returned "
                         "unrecognized %d %s", class, rc, strerror(rc));
             }
         }
@@ -323,8 +323,8 @@ copp_stats_cb(struct stats_blk_params *sblk, enum stats_block_id blk_id) {
             goto out;
         }
         if (len > STATS_BUF_SIZE) {
-            VLOG_WARN("stringifying stats would over buffer space (should not "
-                "happen). Not reporting class %d", class);
+            VLOG_WARN("could not convert stats to string. Not reporting class "
+                " %d", class);
             goto out;
         }
 
