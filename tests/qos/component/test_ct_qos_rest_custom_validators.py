@@ -127,6 +127,8 @@ class QosRestCustomValidatorsTest(OpsVsiTest):
                            controller=None, build=True)
 
 
+@pytest.mark.skipif(True, reason="Now that rest has enabled authentication, "
+                    "these tests need to use cookies.")
 class Test_qos_rest_custom_validators:
     def setup_class(cls):
         Test_qos_rest_custom_validators.test = QosRestCustomValidatorsTest()
