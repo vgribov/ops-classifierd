@@ -92,6 +92,15 @@ def format(s):
     return s.format(**globals())
 
 def rest_sanity_check(switch_ip):
+    login_url = "https://" + str(switch_ip) + "/login"
+    result = ops1("curl -D /tmp/header$$ --noproxy " + str(switch_ip) + \
+                  " -X POST --fail -ksSfL --url \"" + login_url + "\" " + \
+                  "-H \"Content-Type: application/x-www-form-urlencoded\" " + \
+                  "-d \"username=netop&password=netop\"", shell='bash')
+
+    result = ops1("grep Set-Cookie /tmp/header$$|awk '{print $2}' " + \
+                  "> /tmp/COOKIE", shell='bash')
+
     # Check if bridge_normal is ready, loop until ready or timeout finish
     system_path = "/rest/v1/system"
     bridge_path = "/rest/v1/system/bridges/bridge_normal"
@@ -186,6 +195,7 @@ def execute_request(url, method, data, rest_server_ip):
     command = '2>&1'
 
     curl_command = ('curl -v -k -H \"Content-Type: application/json\" '
+                    '-H \"Cookie: $(cat /tmp/COOKIE)\" '
                     '--retry 3 ')
     curl_xmethod = '-X ' + method + ' '
     curl_url = '\"https://' + rest_server_ip + url + '\" '
@@ -570,7 +580,6 @@ def case_add_active_mirror_foo_empty_lag_fails():
 
     rest_get_fails(mirror_name)
 
-@pytest.mark.skipif(True, reason="Once swagger is working again, enable this.")
 def test_mirror_ct_rest_custom_validators(topology, setup):
     case_1_activate_ms_foo_succeeds()
     case_2_add_second_source_to_active_ms_foo_succeeds()
