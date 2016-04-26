@@ -83,7 +83,7 @@ const char * const temp_copp_totals_keys[COPP_STATS_TOTAL_MAX] = {
 };
 
 
-#define TEMP_COPP_STATS_BUF_FMT "%lu,%lu,%lu,%lu,%lu,%lu,%lu "
+#define TEMP_COPP_STATS_BUF_FMT "%lu,%lu,%lu,%lu,%lu,%lu,%lu"
 #define TEMP_COPP_STATS_VARS(h, c)         \
         h.rate, h.burst, h.local_priority,  \
         c.packets_passed, c.bytes_passed,   \
