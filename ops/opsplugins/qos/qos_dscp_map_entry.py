@@ -32,6 +32,10 @@ class QosDscpMapEntryValidator(BaseValidator):
     # Validates that the given modification to a given row is allowed.
     #
     def validate_modification(self, validation_args):
+        if validation_args.is_new:
+            details = "DSCP Map Entries cannot be created."
+            raise ValidationError(error.VERIFICATION_FAILED, details)
+
         qos_dscp_map_entry_row = validation_args.resource_row
         self.validate_dscp_map_description_contains_valid_chars(
             qos_dscp_map_entry_row)

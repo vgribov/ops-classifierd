@@ -73,13 +73,17 @@ def setup(topology):
 
     rest_sanity_check(switch_ip)
 
-    ops1(format('end'))
-    ops1(format('configure terminal'))
-    ops1(format('interface {p1}'))
-    ops1(format('interface {p2}'))
-    ops1(format('interface {p3}'))
-    ops1(format('interface {p4}'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.ConfigInterface('1') as ctx:
+        ctx.no_shutdown()
+    with ops1.libs.vtysh.ConfigInterface('2') as ctx:
+        ctx.no_shutdown()
+    with ops1.libs.vtysh.ConfigInterface('3') as ctx:
+        ctx.no_shutdown()
+    with ops1.libs.vtysh.ConfigInterface('4') as ctx:
+        ctx.no_shutdown()
+
+    with ops1.libs.vtysh.ConfigInterfaceLag('10') as ctx:
+        ctx.no_shutdown()
 
 def get_switch_ip(switch):
     switch_ip = switch('python -c \"import socket; '
@@ -205,44 +209,41 @@ def execute_request(url, method, data, rest_server_ip):
     count = 1
     max_retries = 60  # 1 minute
     while count <= max_retries:
-        try:
-            command = '2>&1'
+        command = '2>&1'
 
-            curl_command = ('curl -v -k -H \"Content-Type: application/json\" '
-                            '-H \"Cookie: $(cat /tmp/COOKIE)\" '
-                            '--retry 3 ')
-            curl_xmethod = '-X ' + method + ' '
-            curl_url = '\"https://' + rest_server_ip + url + '\" '
-            curl_command += curl_xmethod
+        curl_command = ('curl -v -k -H \"Content-Type: application/json\" '
+                        '-H \"Cookie: $(cat /tmp/COOKIE)\" '
+                        '--retry 3 ')
+        curl_xmethod = '-X ' + method + ' '
+        curl_url = '\"https://' + rest_server_ip + url + '\" '
+        curl_command += curl_xmethod
 
-            if (data):
-                curl_command += '-d \'' + data + '\' '
+        if (data):
+            curl_command += '-d \'' + data + '\' '
 
-            curl_command += curl_url
+        curl_command += curl_url
 
-            if (command):
-                curl_command += command
+        if (command):
+            curl_command += command
 
-            result = ops1(curl_command, shell='bash')
+        result = ops1(curl_command, shell='bash')
 
-            status_code = get_status_code(result)
-            response_data = get_response_data(result)
+        status_code = get_status_code(result)
+        response_data = get_response_data(result)
 
-            if "Unauthorized" not in response_data:
-                # Authentication succeeded. Return the response.
-                return status_code, response_data
+        if status_code != http.client.UNAUTHORIZED:
+            # Authentication succeeded. Return the response.
+            return status_code, response_data
 
-            # Save a copy of the cookie.
-            login_url = "https://" + str(switch_ip) + "/login"
-            ops1("curl -D /tmp/header$$ --noproxy " + str(switch_ip) + \
-                 " -X POST --fail -ksSfL --url \"" + login_url + \
-                 "\" -H \"Content-Type: " + \
-                 "application/x-www-form-urlencoded\" " + \
-                 "-d \"username=netop&password=netop\"", shell='bash')
-            ops1("grep Set-Cookie /tmp/header$$|awk '{print $2}' " + \
-                          "> /tmp/COOKIE", shell='bash')
-        except:
-            pass
+        # Save a copy of the cookie.
+        login_url = "https://" + str(switch_ip) + "/login"
+        ops1("curl -D /tmp/header$$ --noproxy " + str(switch_ip) + \
+             " -X POST --fail -ksSfL --url \"" + login_url + \
+             "\" -H \"Content-Type: " + \
+             "application/x-www-form-urlencoded\" " + \
+             "-d \"username=netop&password=netop\"", shell='bash')
+        ops1("grep Set-Cookie /tmp/header$$|awk '{print $2}' " + \
+                      "> /tmp/COOKIE", shell='bash')
 
         count += 1
         time.sleep(1)
@@ -593,10 +594,6 @@ def case_add_active_mirror_foo_non_system_interface_fails():
     rest_get_fails(mirror_name)
 
 def case_add_active_mirror_foo_empty_lag_fails():
-    ops1(format('configure terminal'))
-    ops1(format('interface lag 10'))
-    ops1(format('end'))
-
     mirror_name = "foo"
     mirror_data = {
         "configuration": {

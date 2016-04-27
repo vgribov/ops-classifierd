@@ -20,6 +20,10 @@ import re
 import pytest
 from copy import deepcopy
 import time
+import syslog
+from pytest import raises
+from topology_lib_vtysh.exceptions import UnknownVtyshException
+from topology_lib_vtysh.exceptions import TcamResourcesException
 
 TOPOLOGY = """
 # +-------+
@@ -43,6 +47,12 @@ p3 = None
 p4 = None
 switch_ip = None
 
+# empirically tested -- in a stressed docker container, the maximum time to
+# activate a mirror was 83 seconds.  Sad, but true.
+testInitialSleep = 1
+testRetryLimit = 90
+testRetrySleep = 1
+
 @pytest.fixture(scope="module")
 def setup(topology):
     global ops1
@@ -50,54 +60,52 @@ def setup(topology):
     assert ops1 is not None
 
     global p1
-    global p2
-    global p3
-    global p4
-
     p1 = ops1.ports['1']
-    p2 = ops1.ports['2']
-    p3 = ops1.ports['3']
-    p4 = ops1.ports['4']
-
     assert p1 is not None
+
+    global p2
+    p2 = ops1.ports['2']
     assert p2 is not None
+
+    global p3
+    p3 = ops1.ports['3']
     assert p3 is not None
+
+    global p4
+    p4 = ops1.ports['4']
     assert p4 is not None
 
     global switch_ip
     switch_ip = get_switch_ip(ops1)
     assert switch_ip is not None
 
-    # TODO: improve to a better check.
     # Give the openswitch container time to start up.
-    time.sleep(20)
+    # There is no sleep time that is certain to succeed, hence the use of
+    #   retries following the first few mirror activation attempts
+    time.sleep(testInitialSleep)
 
-    ops1(format('end'))
-    ops1(format('configure terminal'))
+    ops1.libs.vtysh.ConfigVlan("1")
 
-    ops1(format('vlan 1'))
+    with ops1.libs.vtysh.ConfigInterface('1') as ctx:
+        ctx.no_routing()
+        ctx.vlan_access("1")
+        ctx.vlan_trunk_allowed("1")
 
-    ops1(format('interface {p1}'))
-    ops1(format('no routing'))
-    ops1(format('vlan access 1'))
-    ops1(format('vlan trunk allowed 1'))
+    with ops1.libs.vtysh.ConfigInterface('2') as ctx:
+        ctx.no_routing()
+        ctx.vlan_access("1")
+        ctx.vlan_trunk_allowed("1")
 
-    ops1(format('interface {p2}'))
-    ops1(format('no routing'))
-    ops1(format('vlan access 1'))
-    ops1(format('vlan trunk allowed 1'))
+    with ops1.libs.vtysh.ConfigInterface('3') as ctx:
+        ctx.no_routing()
+        ctx.vlan_access("1")
+        ctx.vlan_trunk_allowed("1")
 
-    ops1(format('interface {p3}'))
-    ops1(format('no routing'))
-    ops1(format('vlan access 1'))
-    ops1(format('vlan trunk allowed 1'))
+    with ops1.libs.vtysh.ConfigInterface('4') as ctx:
+        ctx.no_routing()
+        ctx.vlan_access("1")
+        ctx.vlan_trunk_allowed("1")
 
-    ops1(format('interface {p4}'))
-    ops1(format('no routing'))
-    ops1(format('vlan access 1'))
-    ops1(format('vlan trunk allowed 1'))
-
-    ops1(format('end'))
 
 def get_switch_ip(switch):
     switch_ip = switch('python -c \"import socket; '
@@ -105,9 +113,6 @@ def get_switch_ip(switch):
                        shell='bash')
     switch_ip = switch_ip.rstrip('\r\n')
     return switch_ip
-
-def format(s):
-    return s.format(**globals())
 
 ### Returns true if the given string contains a line that contains each
 ### string in the given list of strings.
@@ -122,330 +127,375 @@ def contains_line_with(string, strings):
 
     return False
 
+### Find list index based on 'id'
+#       "show mirror <name>" displays source interfaces in random order
+#           source interface 2 tx
+#       additionally, when a direction (tx|rx) is not defined, it displays
+#       the parameters in reverse order:
+#           source interface tx none
+#
+def interface_in_source_list(out, id):
+    i = 0
+    for source in out['source']:
+        if source['id'] == id:
+            return i
+        i = i + 1
+    return -1
+
+def assertMirrorWithRetry(testcase, mirror, status, retries):
+    out = ops1.libs.vtysh.show_mirror()
+    i = 0
+    syslog.syslog(syslog.LOG_INFO,
+                  ">>>>> " + testcase + " show mirror " + str(i) + " " +
+                  out[mirror]['name'] + "/" + out[mirror]['status'] + " <<<<<")
+    while out[mirror]['status'] != status:
+        i = i + 1
+        time.sleep(testRetrySleep)
+        assert i < retries
+        out = ops1.libs.vtysh.show_mirror()
+        syslog.syslog(syslog.LOG_INFO,
+                      ">>>>> " + testcase + " show mirror x " + str(i) + " " +
+                      out[mirror]['name'] + "/" + out[mirror]['status'] + " <<<<<")
+
+    assert out[mirror]['name'] == mirror
+    assert out[mirror]['status'] == status
+
+    out = ops1.libs.vtysh.show_mirror(mirror)
+    assert out['name'] == mirror
+    assert out['status'] == status
+
 def case_1_activate_ms_foo_succeeds():
-    ops1(format('configure terminal'))
-    ops1(format('mirror session foo'))
-    ops1(format('source interface {p2} both'))
-    ops1(format('destination interface {p3}'))
-    ops1(format('no shutdown'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.ConfigMirrorSession("foo") as ctx:
+        ctx.source_interface('2',"both")
+        ctx.destination_interface('3')
+        ctx.no_shutdown()
 
-    out = ops1(format('show mirror'))
-    assert contains_line_with(out, ["foo", "active"])
+    assertMirrorWithRetry('case1','foo','active',testRetryLimit)
 
-    out = ops1(format('show mirror foo'))
-    assert 'Mirror Session: foo' in out
-    assert 'Status: active' in out
-    assert format('Source: interface {p2} both') in out
-    assert format('Destination: interface {p3}') in out
+    out = ops1.libs.vtysh.show_mirror('foo')
+    assert len(out['source']) == 1  #-- 'both' should have only 1 source listed
+    assert out['source'][0]['type'] == 'interface'
+    assert out['source'][0]['direction'] == 'both'
+    assert out['source'][0]['id'] == p2
+    assert out['destination']['type'] == 'interface'
+    assert out['destination']['id'] == p3
 
 def case_2_add_second_source_to_active_mirror_session_foo_succeeds():
-    ops1(format('configure terminal'))
-    ops1(format('mirror session foo'))
-    ops1(format('source interface {p1} rx'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.ConfigMirrorSession("foo") as ctx:
+        ctx.source_interface('1',"rx")
 
-    out = ops1(format('show mirror foo'))
-    assert 'Mirror Session: foo' in out
-    assert 'Status: active' in out
-    assert format('Source: interface {p1} rx') in out
-    assert format('Source: interface {p2} both') in out
-    assert format('Destination: interface {p3}') in out
+    out = ops1.libs.vtysh.show_mirror('foo')
+    assert out['name'] == 'foo'
+    assert out['status'] == 'active'
+    assert len(out['source']) == 2
+    int_idx = interface_in_source_list(out, p1)
+    assert int_idx >= 0
+    assert out['source'][int_idx]['type'] == 'interface'
+    assert out['source'][int_idx]['direction'] == 'rx'
+    int_idx = interface_in_source_list(out, p2)
+    assert int_idx >= 0
+    assert out['source'][int_idx]['type'] == 'interface'
+    assert out['source'][int_idx]['direction'] == 'both'
+    assert out['destination']['type'] == 'interface'
+    assert out['destination']['id'] == p3
 
 def case_3_remove_first_source_to_active_mirror_session_foo_succeeds():
-    ops1(format('configure terminal'))
-    ops1(format('mirror session foo'))
-    ops1(format('no source interface {p2} tx'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.ConfigMirrorSession("foo") as ctx:
+        ctx.no_source_interface('2')  # 'both' is default
 
-    out = ops1(format('show mirror foo'))
-    assert 'Mirror Session: foo' in out
-    assert 'Status: active' in out
-    assert format('Source: interface {p1} rx') in out
-    assert format('Destination: interface {p3}') in out
+    out = ops1.libs.vtysh.show_mirror('foo')
+    assert out['name'] == 'foo'
+    assert out['status'] == 'active'
+    assert len(out['source']) == 2
+    int_idx = interface_in_source_list(out, p1)
+    assert int_idx >= 0
+    assert out['source'][int_idx]['type'] == 'interface'
+    assert out['source'][int_idx]['direction'] == 'rx'
+    # note: instead of searching for "none", we have to search for "tx"
+    #       because "show mirror" reverses the parameters in the "none case
+    int_idx = interface_in_source_list(out, "tx")
+    assert int_idx >= 0
+    assert out['source'][int_idx]['type'] == 'interface'
+    assert out['source'][int_idx]['direction'] == 'none'
+    assert out['destination']['type'] == 'interface'
+    assert out['destination']['id'] == p3
 
 def case_4_activate_mirror_session_bar_succeeds():
-    ops1(format('configure terminal'))
-    ops1(format('mirror session bar'))
-    ops1(format('source interface {p2} tx'))
-    ops1(format('destination interface {p4}'))
-    ops1(format('no shutdown'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.ConfigMirrorSession("bar") as ctx:
+        ctx.source_interface('2',"tx")
+        ctx.destination_interface('4')
+        ctx.no_shutdown()
 
-    out = ops1(format('show mirror'))
-    assert contains_line_with(out, ["bar", "active"])
+    assertMirrorWithRetry('case4','bar','active',testRetryLimit)
+    out = ops1.libs.vtysh.show_mirror('bar')
+    assert out['name'] == 'bar'
+    assert out['status'] == 'active'
+    assert len(out['source']) == 2
+    int_idx = interface_in_source_list(out, p2)
+    assert int_idx >= 0
+    assert out['source'][int_idx]['type'] == 'interface'
+    assert out['source'][int_idx]['direction'] == 'tx'
+    int_idx = interface_in_source_list(out, "rx")
+    assert int_idx >= 0
+    assert out['source'][int_idx]['type'] == 'interface'
+    assert out['source'][int_idx]['direction'] == 'none'
+    assert out['destination']['type'] == 'interface'
+    assert out['destination']['id'] == p4
 
-    out = ops1(format('show mirror bar'))
-    assert 'Mirror Session: bar' in out
-    assert 'Status: active' in out
-    assert format('Source: interface {p2} tx') in out
-    assert format('Destination: interface {p4}') in out
-
-    out = ops1(format('show running-config'))
-    assert 'mirror session foo' in out
-    assert 'mirror session bar' in out
+    out = ops1.libs.vtysh.show_running_config()
+    assert out['mirror_session']['foo'] == 'foo'
+    assert out['mirror_session']['bar'] == 'bar'
 
 def case_5_attempt_another_session_using_existing_destination_fails():
-    ops1(format('configure terminal'))
-    ops1(format('mirror session dup'))
-    ops1(format('source interface {p1} rx'))
-    ops1(format('destination interface {p4}'))
-    out = ops1(format('no shutdown'))
-    assert 'already in use as destination in active session bar' in out
-    ops1(format('end'))
+    with raises(UnknownVtyshException):
+        with ops1.libs.vtysh.ConfigMirrorSession("dup") as ctx:
+            ctx.source_interface('1',"rx")
+            ctx.destination_interface('4')
+            ctx.no_shutdown()
 
-    out = ops1(format('show mirror'))
-    assert contains_line_with(out, ["dup", "shutdown"])
+    assertMirrorWithRetry('case5','dup','shutdown',testRetryLimit)
 
-    out = ops1(format('show mirror dup'))
-    assert 'Mirror Session: dup' in out
-    assert 'Status: new' in out
-    assert format('Source: interface {p1} rx') in out
-    assert format('Destination: interface {p4}') in out
+    out = ops1.libs.vtysh.show_mirror('dup')
+    assert len(out['source']) == 2
+    int_idx = interface_in_source_list(out, p1)
+    assert int_idx >= 0
+    assert out['source'][int_idx]['type'] == 'interface'
+    assert out['source'][int_idx]['direction'] == 'rx'
+    int_idx = interface_in_source_list(out, "tx")
+    assert int_idx >= 0
+    assert out['source'][int_idx]['type'] == 'interface'
+    assert out['source'][int_idx]['direction'] == 'none'
+    assert out['destination']['type'] == 'interface'
+    assert out['destination']['id'] == p4
 
-    ops1(format('configure terminal'))
-    ops1(format('no mirror session dup'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.Configure() as ctx:
+        ctx.no_mirror_session("dup")
 
 def case_6_attempt_another_session_with_destination_using_existing_rx_source_interface_fails():
-    ops1(format('configure terminal'))
-    ops1(format('mirror session dup'))
-    ops1(format('source interface {p2} rx'))
-    ops1(format('destination interface {p1}'))
-    out = ops1(format('no shutdown'))
-    assert 'already in use as source in active session' in out
-    ops1(format('end'))
+    with raises(UnknownVtyshException):
+        with ops1.libs.vtysh.ConfigMirrorSession("dup") as ctx:
+            ctx.source_interface('2',"rx")
+            ctx.destination_interface('1')
+            ctx.no_shutdown()
 
-    ops1(format('configure terminal'))
-    ops1(format('no mirror session dup'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.Configure() as ctx:
+        ctx.no_mirror_session("dup")
 
 def case_7_attempt_another_session_with_destination_using_existing_tx_source_interface_fails():
-    ops1(format('configure terminal'))
-    ops1(format('mirror session dup'))
-    ops1(format('source interface {p1} rx'))
-    ops1(format('destination interface {p2}'))
-    out = ops1(format('no shutdown'))
-    assert 'already in use as source in active session' in out
-    ops1(format('end'))
+    with raises(UnknownVtyshException):
+        with ops1.libs.vtysh.ConfigMirrorSession("dup") as ctx:
+            ctx.source_interface('1',"rx")
+            ctx.destination_interface('2')
+            out = ctx.no_shutdown()
+            assert 'already in use as source in active session' in out
 
-    ops1(format('configure terminal'))
-    ops1(format('no mirror session dup'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.Configure() as ctx:
+        ctx.no_mirror_session("dup")
 
 def case_8_attempt_another_session_with_source_rx_using_existing_destination_interface_fails():
-    ops1(format('configure terminal'))
-    ops1(format('mirror session dup'))
-    ops1(format('source interface {p3} rx'))
-    ops1(format('destination interface {p4}'))
-    out = ops1(format('no shutdown'))
-    assert 'already in use as destination in active session' in out
-    ops1(format('end'))
+    with raises(UnknownVtyshException):
+        with ops1.libs.vtysh.ConfigMirrorSession("dup") as ctx:
+            ctx.source_interface('3',"rx")
+            ctx.destination_interface('4')
+            out = ctx.no_shutdown()
+            assert 'already in use as destination in active session' in out
 
-    ops1(format('configure terminal'))
-    ops1(format('no mirror session dup'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.Configure() as ctx:
+        ctx.no_mirror_session("dup")
 
 def case_9_attempt_another_session_with_source_tx_using_existing_destination_interface_fails():
-    ops1(format('configure terminal'))
-    ops1(format('mirror session dup'))
-    ops1(format('source interface {p3} tx'))
-    ops1(format('destination interface {p4}'))
-    out = ops1(format('no shutdown'))
-    assert 'already in use as destination in active session' in out
-    ops1(format('end'))
+    with raises(UnknownVtyshException):
+        with ops1.libs.vtysh.ConfigMirrorSession("dup") as ctx:
+            ctx.source_interface('3',"tx")
+            ctx.destination_interface('4')
+            out = ctx.no_shutdown()
+            assert 'already in use as destination in active session' in out
 
-    ops1(format('configure terminal'))
-    ops1(format('no mirror session dup'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.Configure() as ctx:
+        ctx.no_mirror_session("dup")
 
 def case_10_attempt_another_session_with_same_source_rx_and_destination_interface_fails():
-    ops1(format('configure terminal'))
-    ops1(format('mirror session dup'))
-    ops1(format('source interface {p3} rx'))
-    out = ops1(format('destination interface {p3}'))
-    assert 'Cannot add destination' in out
-    assert 'already a source' in out
-    ops1(format('end'))
+    with raises(UnknownVtyshException):
+        with ops1.libs.vtysh.ConfigMirrorSession("dup") as ctx:
+            ctx.source_interface('3',"rx")
+            out = ctx.destination_interface('3')
+            assert 'Cannot add destination' in out
+            assert 'already a source' in out
 
-    ops1(format('configure terminal'))
-    ops1(format('no mirror session dup'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.Configure() as ctx:
+        ctx.no_mirror_session("dup")
 
 def case_11_attempt_another_session_with_same_source_tx_and_destination_interface_fails():
-    ops1(format('configure terminal'))
-    ops1(format('mirror session dup'))
-    ops1(format('source interface {p3} tx'))
-    out = ops1(format('destination interface {p3}'))
-    assert 'Cannot add destination' in out
-    assert 'already a source' in out
-    ops1(format('end'))
+    with raises(UnknownVtyshException):
+        with ops1.libs.vtysh.ConfigMirrorSession("dup") as ctx:
+            ctx.source_interface('3',"tx")
+            out = ctx.destination_interface('3')
+            assert 'Cannot add destination' in out
+            assert 'already a source' in out
 
-    ops1(format('configure terminal'))
-    ops1(format('no mirror session dup'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.Configure() as ctx:
+        ctx.no_mirror_session("dup")
 
 def case_12_attempt_another_session_without_a_destination_interface_fails():
-    ops1(format('configure terminal'))
-    ops1(format('mirror session dup'))
-    ops1(format('source interface {p1} tx'))
-    out = ops1(format('no shutdown'))
-    assert 'No mirror destination interface configured' in out
-    ops1(format('end'))
+    with raises(UnknownVtyshException):
+        with ops1.libs.vtysh.ConfigMirrorSession("dup") as ctx:
+            ctx.source_interface('3',"tx")
+            out = ctx.no_shutdown()
+            assert 'No mirror destination interface configured' in out
 
-    ops1(format('configure terminal'))
-    ops1(format('no mirror session dup'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.Configure() as ctx:
+        ctx.no_mirror_session("dup")
 
 def case_13_create_inactive_duplicate_mirror_session_dup_succeeds():
-    ops1(format('configure terminal'))
-    ops1(format('mirror session dup'))
-    ops1(format('source interface {p1} rx'))
-    ops1(format('destination interface {p3}'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.ConfigMirrorSession("dup") as ctx:
+        ctx.source_interface('1',"rx")
+        ctx.destination_interface('3')
 
-    out = ops1(format('show mirror'))
-    assert contains_line_with(out, ["dup", "shutdown"])
+    out = ops1.libs.vtysh.show_mirror('')
+    assert out['dup']['status'] == 'shutdown'
 
 def case_14_deactivate_mirror_session_foo():
-    ops1(format('configure terminal'))
-    ops1(format('mirror session foo'))
-    ops1(format('shutdown'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.ConfigMirrorSession("foo") as ctx:
+        ctx.shutdown()
 
-    out = ops1(format('show mirror'))
-    assert contains_line_with(out, ["foo", "shutdown"])
+    out = ops1.libs.vtysh.show_mirror('')
+    assert out['foo']['status'] == 'shutdown'
 
 def case_15_activate_mirror_session_dup():
-    ops1(format('configure terminal'))
-    ops1(format('mirror session dup'))
-    ops1(format('no shutdown'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.ConfigMirrorSession("dup") as ctx:
+        ctx.no_shutdown()
 
-    out = ops1(format('show mirror'))
-    assert contains_line_with(out, ["dup", "active"])
+    out = ops1.libs.vtysh.show_mirror('')
+    assert out['dup']['status'] == 'active'
 
 def case_16_remove_inactive_mirror_session_foo_succeeds():
-    ops1(format('configure terminal'))
-    ops1(format('no mirror session foo'))
-    ops1(format('no shutdown'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.Configure() as ctx:
+        ctx.no_mirror_session("foo")
 
-    out = ops1(format('show mirror'))
-    assert 'foo' not in out
+    out = ops1.libs.vtysh.show_mirror('')
+    assert 'foo' not in out.keys()
 
-    out = ops1(format('show mirror foo'))
-    assert 'Invalid mirror session' in out
+    out = ops1.libs.vtysh.show_mirror('foo')
+    assert out is "Invalid"
 
 def case_17_remove_active_mirror_session_dup_succeeds():
-    ops1(format('configure terminal'))
-    ops1(format('no mirror session dup'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.Configure() as ctx:
+        ctx.no_mirror_session("dup")
 
-    out = ops1(format('show mirror'))
-    assert 'dup' not in out
+    out = ops1.libs.vtysh.show_mirror('')
+    assert 'dup' not in out.keys()
 
-    out = ops1(format('show mirror dup'))
-    assert 'Invalid mirror session' in out
+    out = ops1.libs.vtysh.show_mirror('dup')
+    assert out is "Invalid"
 
 def case_18_remove_active_mirror_session_bar_succeeds():
-    ops1(format('configure terminal'))
-    ops1(format('no mirror session bar'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.Configure() as ctx:
+        ctx.no_mirror_session("bar")
 
-    out = ops1(format('show mirror bar'))
-    assert 'Invalid mirror session' in out
+    out = ops1.libs.vtysh.show_mirror('bar')
+    assert out is "Invalid"
 
-    out = ops1(format('show mirror'))
-    assert out == ''
+    out = ops1.libs.vtysh.show_mirror('')
+    assert out is "None"
 
-    out = ops1(format('show running-config'))
-    assert 'mirror session' not in out
+    out = ops1.libs.vtysh.show_running_config()
+    assert not out['mirror_session']
 
 def case_19_create_lag_succeeds():
-    ops1(format('configure terminal'))
+    with ops1.libs.vtysh.ConfigInterfaceLag('100') as ctx:
+        ctx.no_routing()
+        ctx.vlan_access('1')
+        ctx.vlan_trunk_allowed('1')
+        ctx.no_shutdown()
 
-    ops1(format('interface lag 100'))
-    ops1(format('no routing'))
-    ops1(format('vlan access 1'))
-    ops1(format('vlan trunk allowed 1'))
-    ops1(format('no shutdown'))
-
-    ops1(format('interface {p1}'))
-    ops1(format('lag 100'))
-    ops1(format('interface {p2}'))
-    ops1(format('lag 100'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.ConfigInterface('1') as ctx:
+        ctx.lag("100")
+    with ops1.libs.vtysh.ConfigInterface('2') as ctx:
+        ctx.lag("100")
 
 def case_20_mirror_session_with_source_lag_succeeds():
-    ops1(format('configure terminal'))
-    ops1(format('mirror session foo'))
-    ops1(format('source interface lag100 rx'))
-    ops1(format('destination interface {p3}'))
-    ops1(format('no shutdown'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.ConfigMirrorSession("foo") as ctx:
+        ctx.source_interface("lag100", 'rx')
+        ctx.destination_interface('3')
+        ctx.no_shutdown()
 
-    out = ops1(format('show mirror'))
+    out = ops1.libs.vtysh.show_mirror('')
     # TODO: once mirror lags can be enabled in the container, uncomment this.
-#     assert contains_line_with(out, ["foo", "active"])
+#     assert out['foo']['status'] == 'active'
 
-    out = ops1(format('show mirror foo'))
-    assert 'Mirror Session: foo' in out
+    out = ops1.libs.vtysh.show_mirror('foo')
+    assert out['name'] == 'foo'
     # TODO: once mirror lags can be enabled in the container, uncomment this.
-#     assert 'Status: active' in out
-    assert 'Source: interface lag100 rx' in out
-    assert format('Destination: interface {p3}') in out
+#    assert out['status'] == 'active'
+    assert len(out['source']) == 2
+    int_idx = interface_in_source_list(out, "lag100")
+    assert int_idx >= 0
+    assert out['source'][int_idx]['type'] == 'interface'
+    assert out['source'][int_idx]['direction'] == 'rx'
+    int_idx = interface_in_source_list(out, "tx")
+    assert int_idx >= 0
+    assert out['source'][int_idx]['type'] == 'interface'
+    assert out['source'][int_idx]['direction'] == 'none'
+    assert out['destination']['type'] == 'interface'
+    assert out['destination']['id'] == p3
 
-    ops1(format('configure terminal'))
-    ops1(format('no mirror session foo'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.Configure() as ctx:
+        ctx.no_mirror_session('foo')
 
 def case_21_mirror_session_with_destination_lag_succeeds():
-    ops1(format('configure terminal'))
-    ops1(format('mirror session bar'))
-    ops1(format('source interface {p3} rx'))
-    ops1(format('destination interface lag100'))
-    ops1(format('no shutdown'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.ConfigMirrorSession("bar") as ctx:
+        ctx.source_interface('3', 'rx')
+        ctx.destination_interface("lag100")
+        ctx.no_shutdown()
 
-    out = ops1(format('show mirror'))
+    out = ops1.libs.vtysh.show_mirror('')
     # TODO: once mirror lags can be enabled in the container, uncomment this.
-#     assert contains_line_with(out, ["bar", "active"])
+#     assert out['bar']['status'] == 'active'
 
-    out = ops1(format('show mirror bar'))
-    assert 'Mirror Session: bar' in out
+    out = ops1.libs.vtysh.show_mirror('bar')
+    assert out['name'] == 'bar'
     # TODO: once mirror lags can be enabled in the container, uncomment this.
-#     assert 'Status: active' in out
-    assert format('Source: interface {p3} rx') in out
-    assert 'Destination: interface lag100' in out
+#    assert out['status'] == 'active'
+    assert len(out['source']) == 2
+    int_idx = interface_in_source_list(out, p3)
+    assert int_idx >= 0
+    assert out['source'][int_idx]['type'] == 'interface'
+    assert out['source'][int_idx]['direction'] == 'rx'
+    int_idx = interface_in_source_list(out, "tx")
+    assert int_idx >= 0
+    assert out['source'][int_idx]['type'] == 'interface'
+    assert out['source'][int_idx]['direction'] == 'none'
+    assert out['destination']['type'] == 'interface'
+    assert out['destination']['id'] == "lag100"
 
-    ops1(format('configure terminal'))
-    ops1(format('no mirror session bar'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.Configure() as ctx:
+        ctx.no_mirror_session('bar')
 
-def case_22_add_mirror_non_system_source_interface_fails():
-    ops1(format('configure terminal'))
-    ops1(format('mirror session non_system'))
-    out = ops1(format('source interface bridge_normal rx'))
-    assert 'Invalid interface' in out
-    ops1(format('end'))
+def case_22_add_mirror_non_system_interface_fails():
+    with ops1.libs.vtysh.ConfigInterface('3') as ctx:
+        ctx.routing()
 
-    ops1(format('configure terminal'))
-    ops1(format('no mirror session non_system'))
-    ops1(format('end'))
+    with ops1.libs.vtysh.ConfigSubinterface('3', '1') as ctx:
+        ctx.no_shutdown()
 
-def case_23_add_mirror_non_system_destination_interface_fails():
-    ops1(format('configure terminal'))
-    ops1(format('mirror session non_system'))
-    out = ops1(format('destination interface bridge_normal'))
-    assert 'Invalid interface' in out
-    ops1(format('end'))
+    with raises(UnknownVtyshException):
+        with ops1.libs.vtysh.ConfigMirrorSession("non_system") as ctx:
+            out = ctx.source_interface('3.1',"tx")
+            assert 'Invalid interface' in out
 
-    ops1(format('configure terminal'))
-    ops1(format('no mirror session non_system'))
-    ops1(format('end'))
+    with raises(UnknownVtyshException):
+        with ops1.libs.vtysh.ConfigMirrorSession("non_system") as ctx:
+            out = ctx.destination_interface('3.1')
+            assert 'Invalid interface' in out
 
-@pytest.mark.skipif(True, reason="Once all pd/pi mirror code has been merged, enable this.")
+    with ops1.libs.vtysh.Configure() as ctx:
+        ctx.no_mirror_session("non_system ")
+
+    with ops1.libs.vtysh.ConfigInterface('3') as ctx:
+        ctx.no_routing()
+        ctx.vlan_access("1")
+        ctx.vlan_trunk_allowed("1")
+
 def test_mirror_ct_cli(topology, setup):
     case_1_activate_ms_foo_succeeds()
     case_2_add_second_source_to_active_mirror_session_foo_succeeds()
@@ -468,5 +518,4 @@ def test_mirror_ct_cli(topology, setup):
     case_19_create_lag_succeeds()
     case_20_mirror_session_with_source_lag_succeeds()
     case_21_mirror_session_with_destination_lag_succeeds()
-    case_22_add_mirror_non_system_source_interface_fails()
-    case_23_add_mirror_non_system_destination_interface_fails()
+    case_22_add_mirror_non_system_interface_fails()
