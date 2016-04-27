@@ -108,6 +108,16 @@ def rest_sanity_check(switch_ip):
     max_retries = 60  # 1 minute
     while count <= max_retries:
         try:
+            login_url = "https://" + str(switch_ip) + "/login"
+            ops1("curl -D /tmp/header$$ --noproxy " + str(switch_ip) + \
+                 " -X POST --fail -ksSfL --url \"" + login_url + \
+                 "\" -H \"Content-Type: " + \
+                 "application/x-www-form-urlencoded\" " + \
+                 "-d \"username=netop&password=netop\"", shell='bash')
+
+            ops1("grep Set-Cookie /tmp/header$$|awk '{print $2}' " + \
+                          "> /tmp/COOKIE", shell='bash')
+
             status_system, response_system = \
                 execute_request(system_path, "GET", None, switch_ip)
             status_bridge, response_bridge = \
@@ -192,29 +202,52 @@ def get_port_url(port):
     return format(s)
 
 def execute_request(url, method, data, rest_server_ip):
-    command = '2>&1'
+    count = 1
+    max_retries = 60  # 1 minute
+    while count <= max_retries:
+        try:
+            command = '2>&1'
 
-    curl_command = ('curl -v -k -H \"Content-Type: application/json\" '
-                    '-H \"Cookie: $(cat /tmp/COOKIE)\" '
-                    '--retry 3 ')
-    curl_xmethod = '-X ' + method + ' '
-    curl_url = '\"https://' + rest_server_ip + url + '\" '
-    curl_command += curl_xmethod
+            curl_command = ('curl -v -k -H \"Content-Type: application/json\" '
+                            '-H \"Cookie: $(cat /tmp/COOKIE)\" '
+                            '--retry 3 ')
+            curl_xmethod = '-X ' + method + ' '
+            curl_url = '\"https://' + rest_server_ip + url + '\" '
+            curl_command += curl_xmethod
 
-    if (data):
-        curl_command += '-d \'' + data + '\' '
+            if (data):
+                curl_command += '-d \'' + data + '\' '
 
-    curl_command += curl_url
+            curl_command += curl_url
 
-    if (command):
-        curl_command += command
+            if (command):
+                curl_command += command
 
-    result = ops1(curl_command, shell='bash')
+            result = ops1(curl_command, shell='bash')
 
-    status_code = get_status_code(result)
-    response_data = get_response_data(result)
+            status_code = get_status_code(result)
+            response_data = get_response_data(result)
 
-    return status_code, response_data
+            if "Unauthorized" not in response_data:
+                # Authentication succeeded. Return the response.
+                return status_code, response_data
+
+            # Save a copy of the cookie.
+            login_url = "https://" + str(switch_ip) + "/login"
+            ops1("curl -D /tmp/header$$ --noproxy " + str(switch_ip) + \
+                 " -X POST --fail -ksSfL --url \"" + login_url + \
+                 "\" -H \"Content-Type: " + \
+                 "application/x-www-form-urlencoded\" " + \
+                 "-d \"username=netop&password=netop\"", shell='bash')
+            ops1("grep Set-Cookie /tmp/header$$|awk '{print $2}' " + \
+                          "> /tmp/COOKIE", shell='bash')
+        except:
+            pass
+
+        count += 1
+        time.sleep(1)
+
+    assert count <= max_retries, "Unable to send curl command."
 
 def get_status_code(request_output):
     for line in request_output.split('\n'):
