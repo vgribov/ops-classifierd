@@ -24,6 +24,8 @@ set (CLS_COMMON_DIR ${OPS_CLS_SOURCE_DIR}/common)
 set (CLS_INCLUDE_DIR ${OPS_CLS_SOURCE_DIR}/include)
 # ACL source dir under top level src
 set (CLS_ACL_DIR ${OPS_CLS_SOURCE_DIR}/acl)
+# ACL daemon source dir under ${CLS_ACL_DIR}
+set (ACL_DAEMON_DIR ${CLS_ACL_DIR}/daemon)
 
 MESSAGE("PROJECT_SRC_DIR=${PROJECT_SOURCE_DIR}")
 MESSAGE("OPS_CLS_SOURCE_DIR=${OPS_CLS_SOURCE_DIR}")
@@ -31,6 +33,7 @@ MESSAGE("OPS_CLS_INCLUDE_DIR=${OPS_CLS_INCLUDE_DIR}")
 MESSAGE("CLS_COMMON_DIR=${CLS_COMMON_DIR}")
 MESSAGE("CLS_INCLUDE_DIR=${CLS_INCLUDE_DIR}")
 MESSAGE("CLS_ACL_DIR=${CLS_ACL_DIR}")
+MESSAGE("ACL_DAEMON_DIR=${ACL_DAEMON_DIR}")
 
 # Define compile flags
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -Wall -Werror")
@@ -46,7 +49,11 @@ include_directories (${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR}/${INCL_DIR}
                      ${CLS_INCLUDE_DIR} )
 
 # Sources to build ops-classifierd
-set (SOURCES ${OPS_CLS_SOURCE_DIR}/ops-classifierd.c)
+set (SOURCES ${OPS_CLS_SOURCE_DIR}/classifierd.c
+             ${OPS_CLS_SOURCE_DIR}/classifierd_ovsdb_util.c
+             ${ACL_DAEMON_DIR}/acl_daemon_init.c
+             ${ACL_DAEMON_DIR}/acl_daemon_acls.c
+             ${ACL_DAEMON_DIR}/acl_daemon_ports.c)
 
 set (HEADERS ${OPS_CLS_INCLUDE_DIR}/ops-cls-asic-plugin.h)
 

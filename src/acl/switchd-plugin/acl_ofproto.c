@@ -67,9 +67,13 @@ call_ofproto_ops_cls_apply(struct acl                     *acl,
                            enum ops_cls_direction         direction,
                            struct ops_cls_pd_status       *pd_status)
 {
-    int rc;
-    rc = plugin->ofproto_ops_cls_apply(acl->cfg_pi, ofproto, bridgec_port,
-                                       interface_info, direction, pd_status);
+    int rc = 0;
+    if (plugin && plugin->ofproto_ops_cls_apply) {
+        rc = plugin->ofproto_ops_cls_apply(acl->cfg_pi, ofproto, bridgec_port,
+                                           interface_info, direction,
+                                           pd_status);
+    }
+
     VLOG_DBG("%s rc (%d)", __func__, rc);
     return rc;
 }
@@ -82,11 +86,13 @@ call_ofproto_ops_cls_remove(struct acl                       *acl,
                             enum ops_cls_direction           direction,
                             struct ops_cls_pd_status         *pd_status)
 {
-    int rc;
-    rc = plugin->ofproto_ops_cls_remove(&acl->uuid, acl->name,
-                                        acl->type, ofproto,
-                                        bridgec_port, interface_info,
-                                        direction, pd_status);
+    int rc = 0;
+    if (plugin && plugin->ofproto_ops_cls_remove) {
+        rc = plugin->ofproto_ops_cls_remove(&acl->uuid, acl->name,
+                                            acl->type, ofproto,
+                                            bridgec_port, interface_info,
+                                            direction, pd_status);
+    }
     VLOG_DBG("%s rc (%d)", __func__, rc);
     return rc;
 }
@@ -100,11 +106,13 @@ call_ofproto_ops_cls_replace(struct acl                      *orig_acl,
                              enum ops_cls_direction          direction,
                              struct ops_cls_pd_status        *pd_status)
 {
-    int rc;
-    rc = plugin->ofproto_ops_cls_replace(&orig_acl->uuid, orig_acl->name,
-                                         new_acl->cfg_pi, ofproto,
-                                         bridgec_port, interface_info,
-                                         direction, pd_status);
+    int rc = 0;
+    if (plugin && plugin->ofproto_ops_cls_replace) {
+        rc = plugin->ofproto_ops_cls_replace(&orig_acl->uuid, orig_acl->name,
+                                             new_acl->cfg_pi, ofproto,
+                                             bridgec_port, interface_info,
+                                             direction, pd_status);
+    }
     VLOG_DBG("%s rc (%d)", __func__, rc);
     return rc;
 }
@@ -113,8 +121,10 @@ int
 call_ofproto_ops_cls_list_update(struct acl                     *acl,
                                  struct ops_cls_pd_list_status  *status)
 {
-    int rc;
-    rc = plugin->ofproto_ops_cls_list_update(acl->cfg_pi, status);
+    int rc = 0;
+    if (plugin && plugin->ofproto_ops_cls_list_update) {
+        rc = plugin->ofproto_ops_cls_list_update(acl->cfg_pi, status);
+    }
     VLOG_DBG("%s rc (%d)", __func__, rc);
     return rc;
 }
@@ -129,12 +139,15 @@ call_ofproto_ops_cls_statistics_get(struct acl       *acl,
                       int                            num_entries,
                       struct ops_cls_pd_list_status  *status)
 {
-    int rc;
-    rc = plugin->ofproto_ops_cls_statistics_get(&acl->uuid, acl->name,
-                                                acl->type, ofproto,
-                                                bridgec_port, interface_info,
-                                                direction, statistics,
-                                                num_entries, status);
+    int rc = 0;
+    if (plugin && plugin->ofproto_ops_cls_statistics_get) {
+        rc = plugin->ofproto_ops_cls_statistics_get(&acl->uuid, acl->name,
+                                                    acl->type, ofproto,
+                                                    bridgec_port,
+                                                    interface_info,
+                                                    direction, statistics,
+                                                    num_entries, status);
+    }
     VLOG_DBG("%s rc (%d)", __func__, rc);
     return rc;
 }
@@ -147,12 +160,15 @@ call_ofproto_ops_cls_statistics_clear(struct acl      *acl,
                       enum ops_cls_direction          direction,
                       struct ops_cls_pd_list_status   *status)
 {
-    int rc;
-    rc = plugin->ofproto_ops_cls_statistics_clear(&acl->uuid, acl->name,
-                                                  acl->type, ofproto,
-                                                  bridgec_port,
-                                                  interface_info, direction,
-                                                  status);
+    int rc = 0;
+    if (plugin && plugin->ofproto_ops_cls_statistics_clear) {
+        rc = plugin->ofproto_ops_cls_statistics_clear(&acl->uuid, acl->name,
+                                                      acl->type, ofproto,
+                                                      bridgec_port,
+                                                      interface_info,
+                                                      direction,
+                                                      status);
+    }
     VLOG_DBG("%s rc (%d)", __func__, rc);
     return rc;
 }
@@ -161,8 +177,10 @@ int
 call_ofproto_ops_cls_statistics_clear_all(
                                struct ops_cls_pd_list_status    *status)
 {
-    int rc;
-    rc = plugin->ofproto_ops_cls_statistics_clear_all(status);
+    int rc = 0;
+    if (plugin && plugin->ofproto_ops_cls_statistics_clear_all) {
+        rc = plugin->ofproto_ops_cls_statistics_clear_all(status);
+    }
     VLOG_DBG("%s rc (%d)", __func__, rc);
     return rc;
 }

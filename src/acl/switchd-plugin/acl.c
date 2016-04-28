@@ -440,8 +440,6 @@ acl_reconfigure_init(struct blk_params *blk_params)
     unsigned int idl_seqno;
     bool have_acls = !hmap_is_empty(&all_acls_by_uuid);
 
-    VLOG_INFO("[%s] - acl_reconfigure_init called", ACL_PLUGIN_NAME);
-
     /* Get idl and idl_seqno to work with */
     idl = blk_params->idl;
     idl_seqno = blk_params->idl_seqno;

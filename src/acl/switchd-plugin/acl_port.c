@@ -513,7 +513,7 @@ acl_port_map_stats_get(struct acl_port_map *acl_port_map,
     char    status_str[OPS_CLS_STATUS_MSG_MAX_LEN];
     unsigned int sequence_number = 0;
 
-    VLOG_INFO("%s: acl_port_map port: %s, type %u direction %u\n",__FUNCTION__,
+    VLOG_DBG("%s: acl_port_map port: %s, type %u direction %u\n",__FUNCTION__,
               acl_port_map->parent->port->name, acl_port_map->acl_db->type,
               acl_port_map->acl_db->direction);
 

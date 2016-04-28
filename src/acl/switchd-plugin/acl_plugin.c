@@ -82,13 +82,11 @@ int init (int phase_id)
 
 int run(void)
 {
-    VLOG_INFO("[%s] is running", ACL_PLUGIN_NAME);
     return 0;
 }
 
 int wait(void)
 {
-    VLOG_INFO("[%s] is waiting", ACL_PLUGIN_NAME);
     return 0;
 }
 
