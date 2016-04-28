@@ -27,4 +27,5 @@ MESSAGE("PROJECT_SOURCE_DIR=${PROJECT_SOURCE_DIR}")
 MESSAGE("ACL_INCLUDE_DIR=${ACL_INCLUDE_DIR}")
 MESSAGE("ACL_UTIL_DIR=${ACL_UTIL_DIR}")
 
+add_subdirectory(cli-plugin)
 add_subdirectory(switchd-plugin)
