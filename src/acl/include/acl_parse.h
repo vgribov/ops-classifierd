@@ -21,17 +21,10 @@
 #include <ctype.h>
 #include "ops-cls-asic-plugin.h"
 
-#define ACL_PROTOCOL_ICMP    1
-#define ACL_PROTOCOL_IGMP    2
-#define ACL_PROTOCOL_TCP     6
-#define ACL_PROTOCOL_UDP     17
-#define ACL_PROTOCOL_GRE     47
-#define ACL_PROTOCOL_ESP     50
-#define ACL_PROTOCOL_AH      51
-#define ACL_PROTOCOL_ICMPV6  58
-#define ACL_PROTOCOL_PIM     103
-#define ACL_PROTOCOL_SCTP    132
-#define ACL_PROTOCOL_INVALID 255
+#define ACL_PROTOCOL_INVALID -1 /**< negative value to indicate error  */
+#define ACL_PROTOCOL_MIN      0 /**< lowest possible packet data value */
+#define ACL_PROTOCOL_MAX    256 /**< highest possible packet data valu */
+#define ACL_PROTOCOL_ANY (ACL_PROTOCOL_MAX + 1) /**< positive but beyond max */
 
 /* Log timer constants */
 #define ACL_LOG_TIMER_STR "acl_log_timer"
@@ -53,9 +46,12 @@ bool acl_parse_str_is_numeric(const char *in_str);
  *
  * @param  in_proto String as provided by user interface (e.g. CLI)
  *
- * @return          Numeric protocol number or 255 on error
+ * @retval          Numeric protocol number on success
+ * @retval          ACL_PROTOCOL_INVALID on error
+ * @retval          ACL_PROTOCOL_ANY if in_proto is NULL or "any"
  */
-uint8_t acl_parse_protocol_get_number_from_name(const char *in_proto);
+int acl_parse_protocol_get_number_from_name(const char *in_proto);
+
 
 /**
  * Get all-lowercase string token for a given IP protocol number
@@ -72,6 +68,7 @@ const char *acl_parse_protocol_get_name_from_number(uint8_t proto_number);
  * @param[in]  user_str       User string formatted "any", "A.B.C.D",
  *                            "A.B.C.D/M", "A.B.C.D/W.X.Y.Z".
  * @param[out] normalized_str Database string formatted "A.B.C.D/W.X.Y.Z".
+ *                            "" if given special values "any" or NULL.
  *                            Must be allocated with length INET_ADDRSTRLEN*2.
  *
  * @return                    true on success, false on failure
@@ -84,6 +81,7 @@ bool acl_ipv4_address_user_to_normalized(const char *user_str, char *normalized_
  * @param[in]  normalized_str Database string formatted "A.B.C.D/W.X.Y.Z".
  * @param[out] user_str       User string formatted "any", "A.B.C.D",
  *                            "A.B.C.D/M", "A.B.C.D/W.X.Y.Z".
+ *                            "any" if given special values NULL or "".
  *                            Must be allocated with length INET_ADDRSTRLEN*2.
  *
  * @return                    true on success, false on failure

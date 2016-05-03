@@ -80,40 +80,29 @@ acl_parse_str_is_numeric(const char *in_str)
     return true;
 }
 
-uint8_t
+int
 acl_parse_protocol_get_number_from_name(const char *in_proto)
 {
-    uint8_t protocol = ACL_PROTOCOL_INVALID;
+    int i;
 
-    if (!in_proto) {
-        VLOG_DBG("Null protocol string specified");
-        return protocol;
+    /* Interpret NULL, "any", or "" to mean any protocol */
+    if (!in_proto || !strcmp(in_proto, "any") || !strcmp(in_proto, "")) {
+        return ACL_PROTOCOL_ANY;
     }
 
-    if (!strcmp(in_proto, "ah")) {
-        protocol = ACL_PROTOCOL_AH;
-    } else if (!strcmp(in_proto, "esp")) {
-        protocol = ACL_PROTOCOL_ESP;
-    } else if (!strcmp(in_proto, "icmp")) {
-        protocol = ACL_PROTOCOL_ICMP;
-    } else if (!strcmp (in_proto, "icmpv6")) {
-        protocol = ACL_PROTOCOL_ICMPV6;
-    } else if (!strcmp (in_proto, "igmp")) {
-        protocol = ACL_PROTOCOL_IGMP;
-    } else if (!strcmp (in_proto, "pim")) {
-        protocol = ACL_PROTOCOL_PIM;
-    } else  if (!strcmp (in_proto, "sctp")) {
-        protocol = ACL_PROTOCOL_SCTP;
-    } else if (!strcmp (in_proto, "tcp")) {
-        protocol = ACL_PROTOCOL_TCP;
-    } else if (!strcmp (in_proto, "udp")) {
-        protocol = ACL_PROTOCOL_UDP;
-    } else {
-        VLOG_DBG("Invalid protocol specified %s", in_proto);
-        protocol = ACL_PROTOCOL_INVALID;
+    /* Translate numeric protocols */
+    if (acl_parse_str_is_numeric(in_proto)) {
+        return strtol(in_proto, NULL, 0);
     }
 
-    return protocol;
+    /* Otherwise, look up named protocol */
+    for (i = ACL_PROTOCOL_MIN; i <= ACL_PROTOCOL_MAX; i++) {
+        if (!strcmp(in_proto, protocol_names[i])) {
+            return i;
+        }
+    }
+
+    return ACL_PROTOCOL_INVALID;
 }
 
 static in_addr_t
@@ -148,9 +137,9 @@ acl_ipv4_address_user_to_normalized(const char *user_str, char *normalized_str)
     struct in_addr v4_mask;
     uint8_t prefix_len;
 
-    /* Special case of "any" can return early */
-    if (!strcmp(user_str, "any")) {
-        strcpy(normalized_str, "0.0.0.0/0.0.0.0");
+    /* Special cases of NULL or "any" can return early */
+    if (!user_str || !strcmp(user_str, "any")) {
+        normalized_str[0] = '\0';
         return true;
     }
 
@@ -197,8 +186,8 @@ acl_ipv4_address_normalized_to_user(const char *normalized_str, char *user_str)
     char *slash_ptr;
     char *mask_substr = NULL;
 
-    /* Special case of "any" can return early */
-    if (!strcmp(normalized_str, "0.0.0.0/0.0.0.0")) {
+    /* Special case of "any" or empty string can return early */
+    if (!normalized_str || !strcmp(normalized_str, "")) {
         strcpy(user_str, "any");
         return true;
     }
