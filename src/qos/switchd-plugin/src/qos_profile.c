@@ -136,6 +136,7 @@ qos_free_queue_profile_settings(struct queue_profile_settings *settings)
 
         /* finally, free up the settings parameter itself */
         free(settings->entries);
+        free(settings);
     }
     return;
 }
@@ -247,6 +248,7 @@ qos_free_schedule_profile_settings(struct schedule_profile_settings *settings)
 
         /* finally, free up the settings parameter itself */
         free(settings->entries);
+        free(settings);
     }
     return;
 }
