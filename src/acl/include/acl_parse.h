@@ -19,6 +19,7 @@
 
 #include <stdlib.h>
 #include <ctype.h>
+#include <vswitch-idl.h>
 #include "ops-cls-asic-plugin.h"
 
 #define ACL_PROTOCOL_INVALID -1 /**< negative value to indicate error  */
@@ -88,4 +89,47 @@ bool acl_ipv4_address_user_to_normalized(const char *user_str, char *normalized_
  */
 bool acl_ipv4_address_normalized_to_user(const char *normalized_str, char *user_str);
 
+/**
+ * Add IP address config information to an ACE dynamic string
+ *
+ * @param dstring      Pointer to initialized dynamic string
+ * @param address_str  Pointer to IP address string
+ */
+void acl_entry_ip_address_config_to_ds(struct ds *dstring, char *address_str);
+
+/**
+ * Add L4 port config information to an ACE dynamic string
+ *
+ * @param dstring  Pointer to initialized dynamic string
+ * @param min      First port number
+ * @param max      Last port number
+ * @param reverse  Whether range is reversed
+ */
+void acl_entry_l4_port_config_to_ds(struct ds *dstring,
+                               int64_t min, int64_t max, bool reverse);
+
+/**
+ * Creates a string with an ACL Entry config as if it were entered into the CLI
+ *
+ * @param sequence_num  ACL Entry Sequence number
+ * @param ace_row       Pointer to ACL_Entry row
+ *
+ * @return              ACL Entry string, caller-freed, not newline-terminated
+ */
+char *acl_entry_config_to_string(const int64_t sequence_num,
+                           const struct ovsrec_acl_entry *ace_row);
+
+/**
+ * Look up an ACE by key (sequence number) in ACE statistics
+ *
+ * @param  port_row        Port row pointer
+ * @param  sequence_number ACE sequence number
+ *
+ * @return                 Hit count for ACE, 0 on failure
+ *
+ * @todo This could/should be generated as part of IDL.
+ */
+const int64_t ovsrec_port_aclv4_in_statistics_getvalue(
+                                            const struct ovsrec_port *port_row,
+                                            const int64_t key);
 #endif  /* __OPS_CLS_ACL_PARSE_H__ */
