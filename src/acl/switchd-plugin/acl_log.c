@@ -998,12 +998,6 @@ acl_log_port_aclv4_in_statistics(const struct ovsrec_port *port_row,
 {
     char *ace_str;
     int i;
-    struct ds log_dstr;
-
-    ds_init(&log_dstr);
-
-    ds_put_format(&log_dstr, "ACL %s on interface %s (in):\n", list_name, port_row->name);
-    ds_put_format(&log_dstr, "%20s  %s\n", "Hit Count", "Configuration");
 
     /* Print each ACL entry as a single line (ala CLI input) */
     for (i = 0; i < port_row->aclv4_in_applied->n_cur_aces; i ++) {
@@ -1027,17 +1021,37 @@ acl_log_port_aclv4_in_statistics(const struct ovsrec_port *port_row,
             }
 
             /* print the entry */
-            ds_put_format(&log_dstr, "%20" PRId64, hit_delta);
             ace_str = acl_entry_config_to_string(
                         port_row->aclv4_in_applied->key_cur_aces[i],
                         port_row->aclv4_in_applied->value_cur_aces[i]);
-            ds_put_format(&log_dstr, "  %s\n", ace_str);
+            VLOG_INFO("%s on %s (in): %12" PRId64 "  %s",
+                    list_name, port_row->name, hit_delta, ace_str);
             free(ace_str);
         }
     }
+}
 
-    VLOG_INFO("%s", ds_steal_cstr(&log_dstr));
-    ds_destroy(&log_dstr);
+/* If the admin issues a clear stats command, this function clears the
+ * baseline stats recorded by ACL logging.
+ */
+void
+acl_log_handle_clear_stats(const struct ovsrec_acl *acl)
+{
+    int i;
+
+    for (i = 0; i < acl->n_cur_aces; i++) {
+        struct ace_stat_s *prev_stat;
+
+        /* check for a previous hit count for this ace */
+        HMAP_FOR_EACH_WITH_HASH(prev_stat, hnode,
+                uuid_hash(&acl->value_cur_aces[i]->header_.uuid),
+                &baseline_stats.map) {
+            if (uuid_equals(&acl->value_cur_aces[i]->header_.uuid,
+                        &prev_stat->uuid)) {
+                prev_stat->hit_count = 0;
+            }
+        }
+    }
 }
 
 /* This function prints the increase in hit counts for all ACL statistics

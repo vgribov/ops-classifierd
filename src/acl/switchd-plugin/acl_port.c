@@ -25,6 +25,7 @@
 #include "stats-blocks.h"
 #include "acl_plugin.h"
 #include "acl_ofproto.h"
+#include "acl_log.h"
 #include "ops_cls_status_msgs.h"
 
 
@@ -259,6 +260,7 @@ acl_port_map_update_cfg_internal(struct acl_port_map *acl_port_map,
                                                     &interface_info,
                                                     acl_port_map->acl_db->direction,
                                                     &list_status);
+                acl_log_handle_clear_stats(ovsdb_acl);
                 method_called = OPS_CLS_STATUS_MSG_OP_CLEAR_STR;
 
             }

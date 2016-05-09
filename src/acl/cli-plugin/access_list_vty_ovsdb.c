@@ -1061,6 +1061,7 @@ cli_clear_acl_statistics (const char *acl_type,
     acl_db_util = acl_db_util_accessor_get(OPS_CLS_ACL_V4, OPS_CLS_DIRECTION_IN);
     if (!acl_db_util) {
         VLOG_ERR("Unable to acquire acl_db_util accessor");
+        cli_do_config_abort(transaction);
         return CMD_OVSDB_FAILURE;
     }
     /* No ACL specified (implicit "all" applied ACLs) */
@@ -1089,6 +1090,7 @@ cli_clear_acl_statistics (const char *acl_type,
         acl_row = get_acl_by_type_name(acl_type, acl_name);
         if (!acl_row) {
             vty_out(vty, "%% ACL %s does not exist%s", acl_name, VTY_NEWLINE);
+            cli_do_config_abort(transaction);
             return CMD_ERR_NOTHING_TODO;
         }
         /* No interface specified (implicit "all" interface type/id/direction) */
@@ -1119,6 +1121,7 @@ cli_clear_acl_statistics (const char *acl_type,
             port_row = get_port_by_name(interface_id);
             if (!port_row) {
                 vty_out(vty, "%% Port %s does not exist%s", interface_id, VTY_NEWLINE);
+                cli_do_config_abort(transaction);
                 return CMD_ERR_NOTHING_TODO;
             }
             if (port_row->aclv4_in_applied && (port_row->aclv4_in_applied == acl_row)) {
@@ -1134,6 +1137,7 @@ cli_clear_acl_statistics (const char *acl_type,
 
             } else {
                 vty_out(vty, "%% Specified ACL not applied to interface%s", VTY_NEWLINE);
+                cli_do_config_abort(transaction);
                 return CMD_ERR_NOTHING_TODO;
             }
         /* VLAN */
@@ -1142,12 +1146,14 @@ cli_clear_acl_statistics (const char *acl_type,
             vlan_row = get_vlan_by_id_str(interface_id);
             if (!vlan_row) {
                 vty_out(vty, "%% VLAN %s does not exist%s", interface_id, VTY_NEWLINE);
+                cli_do_config_abort(transaction);
                 return CMD_ERR_NOTHING_TODO;
             }
             if (vlan_row->aclv4_in_applied && (vlan_row->aclv4_in_applied == acl_row)) {
                 VLOG_DBG("Not supported: Clearing ACL statistics vlan=%" PRId64 " acl_name=%s", vlan_row->id, acl_name);
             } else {
                 vty_out(vty, "%% Specified ACL not applied to VLAN%s", VTY_NEWLINE);
+                cli_do_config_abort(transaction);
                 return CMD_ERR_NOTHING_TODO;
             }
         }

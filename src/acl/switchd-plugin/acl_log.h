@@ -64,4 +64,6 @@ void acl_log_run(struct run_blk_params *blk_params);
 
 void acl_log_wait(struct run_blk_params *blk_params);
 
+void acl_log_handle_clear_stats(const struct ovsrec_acl *acl);
+
 #endif /* ACL_LOG_H */
