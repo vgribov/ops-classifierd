@@ -26,6 +26,7 @@
 #include "acl_plugin.h"
 #include "acl_port.h"
 #include "ops_cls_status_msgs.h"
+#include "ops_cls_status_table.h"
 
 VLOG_DEFINE_THIS_MODULE(acl_switchd_plugin_global);
 
@@ -224,6 +225,7 @@ ops_cls_list_new_from_acl(struct acl *acl)
                                    acl_row->value_in_progress_aces[i])) {
             /* VLOG_ERR already emitted */
             valid = false;
+            break;
         }
     }
 
@@ -349,18 +351,21 @@ acl_cfg_update(struct acl* acl)
     char status_str[OPS_CLS_STATUS_MSG_MAX_LEN] = {0};
     unsigned int sequence_number = 0;
     struct ops_cls_list *list = ops_cls_list_new_from_acl(acl);
+
     if (!list) {
-        sprintf(details, "ACL %s -- unable to translate from ovsdb",
-                acl->name);
-        VLOG_DBG(details);
-        /* @todo nice to have PI error code for this condition */
-        acl_set_cfg_status(acl->ovsdb_row, OPS_CLS_STATE_REJECTED_STR, 4, details);
+        snprintf(status_str,OPS_CLS_STATUS_MSG_MAX_LEN,
+                 ops_cls_status_table_get(OPS_CLS_STATUS_LIST_PARSE_ERR),
+                 acl->name);
+        VLOG_WARN(status_str);
+
+        acl_set_cfg_status(acl->ovsdb_row, OPS_CLS_STATE_REJECTED_STR,
+                           OPS_CLS_STATUS_LIST_PARSE_ERR, status_str);
         return;
-    } else {
-        /* delete old PI cache of API obj, and remember new one */
-        ops_cls_list_delete(acl->cfg_pi);
-        acl->cfg_pi = list;
     }
+
+    /* delete old PI cache of API obj, and remember new one */
+    ops_cls_list_delete(acl->cfg_pi);
+    acl->cfg_pi = list;
 
     if (!list_is_empty(&acl->acl_port_map)) {
         /* Make the call down to the PD layer so it can change the

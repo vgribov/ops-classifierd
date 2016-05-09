@@ -329,6 +329,11 @@ enum ops_cls_list_status_code
     OPS_CLS_STATUS_HW_INIT_ERR,         /**< Feature not initialized error */
     OPS_CLS_STATUS_HW_PORT_ERR,         /**< Invalid port error */
     OPS_CLS_STATUS_HW_UNKNOWN_ERR,      /**< Unknown error */
+    OPS_CLS_STATUS_HW_UNSUPPORTED_ERR,  /**< Entry contains unsupported
+                                                           parameter error */
+
+    /* PI status codes */
+    OPS_CLS_STATUS_LIST_PARSE_ERR,      /**< Failed to parse list error */
 
     /* This must be last entry */
     OPS_CLS_STATUS_MAX                  /**< Max status codes */

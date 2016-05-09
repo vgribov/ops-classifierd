@@ -151,6 +151,14 @@ const struct ops_cls_status_table_entry ops_cls_status_msgs[] = {
     {
         OPS_CLS_STATUS_HW_UNKNOWN_ERR,
         OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX "reason: unknown error"
+    },
+    {
+        OPS_CLS_STATUS_HW_UNSUPPORTED_ERR,
+        OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX
+                  "reason: entry contains unsupported parameter"
+    },
+    {
+        OPS_CLS_STATUS_LIST_PARSE_ERR, "Failed to parse ACL configuration for %s"
     }
 };
 
