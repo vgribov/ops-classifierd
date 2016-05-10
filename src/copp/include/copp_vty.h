@@ -23,7 +23,8 @@
 #define COPP_SHOW_CMD   "show copp statistics (bgp|ospfv2-unicast|ospfv2-multicast|" \
                         "lldp|lacp|arp-unicast|arp-broadcast|icmpv4-unicast|" \
                         "icmpv4-multidest|icmpv6-unicast|icmpv6-multicast|" \
-                        "dhcpv4|dhcpv6|acl-logging|sflow|unknown-ip|unclassified)"
+                        "ipv4-options|ipv6-options|dhcpv4|dhcpv6|acl-logging|sflow|" \
+                        "stp|unknown-ip|unclassified)"
 
 #define COPP_MAX_STRING "18446744073709551615"
 #define COPP_ZERO_STRING          "0"

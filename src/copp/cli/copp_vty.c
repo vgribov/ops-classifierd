@@ -210,6 +210,24 @@ vtysh_ovsdb_show_copp_protocol_statistics(int argc, const char *argv[])
         vty_out(vty, "\tControl Plane Packet: sFLOW SAMPLES packets\n\n");
         temp_copp_stats_tokenize(buf);
 
+    } else if (strncmp(argv[0], "stp", COPP_STATS_PROTOCOL_MAX_LENGTH) == 0) {
+        buf = smap_get(&ovs_system->copp_statistics, temp_copp_keys[COPP_STP_BPDU]);
+        COPP_VALIDATE_BUFFER(buf);
+        vty_out(vty, "\tControl Plane Packet: STP packets\n\n");
+        temp_copp_stats_tokenize(buf);
+
+    } else if (strncmp(argv[0], "ipv4-options", COPP_STATS_PROTOCOL_MAX_LENGTH) == 0) {
+        buf = smap_get(&ovs_system->copp_statistics, temp_copp_keys[COPP_IPv4_OPTIONS]);
+        COPP_VALIDATE_BUFFER(buf);
+        vty_out(vty, "\tControl Plane Packet: ipv4-options packets\n\n");
+        temp_copp_stats_tokenize(buf);
+
+    } else if (strncmp(argv[0], "ipv6-options", COPP_STATS_PROTOCOL_MAX_LENGTH) == 0) {
+        buf = smap_get(&ovs_system->copp_statistics, temp_copp_keys[COPP_IPv6_OPTIONS]);
+        COPP_VALIDATE_BUFFER(buf);
+        vty_out(vty, "\tControl Plane Packet: ipv6-options packets\n\n");
+        temp_copp_stats_tokenize(buf);
+
     } else if (strncmp(argv[0], "acl-logging", COPP_STATS_PROTOCOL_MAX_LENGTH) == 0) {
         buf = smap_get(&ovs_system->copp_statistics, temp_copp_keys[COPP_ACL_LOGGING]);
         COPP_VALIDATE_BUFFER(buf);
@@ -335,6 +353,21 @@ vtysh_ovsdb_show_copp_generic_statistics()
     vty_out(vty, "\tControl Plane Packet: sFLOW SAMPLES packets\n\n");
     temp_copp_stats_tokenize(buf);
 
+    buf = smap_get(&ovs_system->copp_statistics, temp_copp_keys[COPP_STP_BPDU]);
+    COPP_VALIDATE_BUFFER(buf);
+    vty_out(vty, "\tControl Plane Packet: STP packets\n\n");
+    temp_copp_stats_tokenize(buf);
+
+    buf = smap_get(&ovs_system->copp_statistics, temp_copp_keys[COPP_IPv4_OPTIONS]);
+    COPP_VALIDATE_BUFFER(buf);
+    vty_out(vty, "\tControl Plane Packet: ipv4-options packets\n\n");
+    temp_copp_stats_tokenize(buf);
+
+    buf = smap_get(&ovs_system->copp_statistics, temp_copp_keys[COPP_IPv6_OPTIONS]);
+    COPP_VALIDATE_BUFFER(buf);
+    vty_out(vty, "\tControl Plane Packet: ipv6-options packets\n\n");
+    temp_copp_stats_tokenize(buf);
+
     buf = smap_get(&ovs_system->copp_statistics, temp_copp_keys[COPP_ACL_LOGGING]);
     COPP_VALIDATE_BUFFER(buf);
     vty_out(vty, "\tControl Plane Packet: ACL LOGGING packets\n\n");
@@ -364,10 +397,13 @@ DEFUN ( vtysh_show_copp_protocol_statistics,
         "Show icmpv4-multidest pkts copp statistics\n"
         "Show icmpv6-unicast pkts copp statistics\n"
         "Show icmpv6-multicast pkts copp statistics\n"
+        "Show ipv4 options pkts copp statistics\n"
+        "Show ipv6 options pkts copp statistics\n"
         "Show dhcpv4 pkts copp statistics\n"
         "Show dhcpv6 pkts copp  statistics\n"
         "Show acl-logging pkts copp statistics\n"
         "Show sflow pkts copp statistics\n"
+        "Show stp pkts copp statistics\n"
         "Show unknown-ip pkts copp statistics\n"
         "Show unclassified pkts copp statistics\n"
       )
