@@ -69,7 +69,7 @@ class SystemQosValidator(BaseValidator):
     def validate_apply_global_queue_profile_has_all_local_priorities(
             self, system_row):
         q_profile = utils.get_column_data_from_row(system_row, "q_profile")
-        if q_profile is None:
+        if not q_profile:
             return
 
         for local_priority in range(0, qos_utils.QOS_MAX_LOCAL_PRIORITY + 1):
@@ -88,7 +88,7 @@ class SystemQosValidator(BaseValidator):
         found_local_priorities = []
 
         q_profile = utils.get_column_data_from_row(system_row, "q_profile")
-        if q_profile is None:
+        if not q_profile:
             return
 
         q_profile_entries = utils.get_column_data_from_row(
@@ -133,7 +133,7 @@ class SystemQosValidator(BaseValidator):
     def validate_apply_global_s_p_has_same_algorithm_on_all_queues(
             self, system_row):
         schedule_profile = utils.get_column_data_from_row(system_row, "qos")
-        if schedule_profile is None:
+        if not schedule_profile:
             return
 
         qos_utils.validate_schedule_profile_has_same_algorithm_on_all_queues(
@@ -144,11 +144,11 @@ class SystemQosValidator(BaseValidator):
     #
     def validate_apply_global_profiles_contain_same_queues(self, system_row):
         q_profile = utils.get_column_data_from_row(system_row, "q_profile")
-        if q_profile is None:
+        if not q_profile:
             return
 
         schedule_profile = utils.get_column_data_from_row(system_row, "qos")
-        if schedule_profile is None:
+        if not schedule_profile:
             return
 
         qos_utils.validate_profiles_contain_same_queues(
@@ -162,7 +162,7 @@ class SystemQosValidator(BaseValidator):
         idl = validation_args.idl
 
         q_profile = utils.get_column_data_from_row(system_row, "q_profile")
-        if q_profile is None:
+        if not q_profile:
             return
 
         for port_row in idl.tables["Port"].rows.itervalues():

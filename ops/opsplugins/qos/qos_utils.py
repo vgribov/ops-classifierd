@@ -71,7 +71,7 @@ def queue_profile_is_applied(validation_args, queue_profile_row):
     idl = validation_args.idl
 
     for system_row in idl.tables["System"].rows.itervalues():
-        if system_row.q_profile is not None and \
+        if system_row.q_profile and \
                 system_row.q_profile[0] == queue_profile_row:
             return True
 
