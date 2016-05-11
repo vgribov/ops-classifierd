@@ -41,6 +41,7 @@ struct acl {
     /* members for working with OVSDB */
     const struct ovsrec_acl *ovsdb_row;
     unsigned int       delete_seqno; /* mark/sweep to identify deleted */
+    uint64_t           in_progress_version; /* In progress version of last change */
 
     /* members representing my cached PI state */
     struct ovs_list acl_port_map;    /* List of struct acl_port_map. */

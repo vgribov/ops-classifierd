@@ -30,7 +30,6 @@
 
 VLOG_DEFINE_THIS_MODULE(acl_switchd_plugin_global);
 
-
 static bool
 acl_parse_ipv4_address(const char *in_address,
                        uint32_t flag,
@@ -288,6 +287,7 @@ acl_create(const struct ovsrec_acl *ovsdb_row, unsigned int seqno)
 
     acl->ovsdb_row = ovsdb_row;
     acl->delete_seqno = seqno;
+    acl->in_progress_version = 0;
 
     list_init(&acl->acl_port_map);
     /* acl->cfg_pi already NULL from xzalloc */
@@ -489,8 +489,10 @@ acl_reconfigure_init(struct blk_params *blk_params)
                     (OVSREC_IDL_IS_ROW_MODIFIED(acl_row, idl_seqno) ||
                      OVSREC_IDL_IS_ROW_INSERTED(acl_row, idl_seqno));
 
-                if (row_changed && acl_row->n_in_progress_aces > 0) {
+                if (row_changed && acl_row->in_progress_version[0] >
+                                   acl->in_progress_version) {
                     acl_cfg_update(acl);
+                    acl->in_progress_version = acl_row->in_progress_version[0];
                 }
             }
         }
