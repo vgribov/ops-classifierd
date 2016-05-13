@@ -52,6 +52,7 @@ static struct acl_log_info info OVS_GUARDED_BY(acl_log_mutex) = { .valid_fields 
 
 /* These are for the switchd plugins */
 static uint64_t acl_log_seqno = LLONG_MIN;
+static uint64_t last_read_seq = LLONG_MIN;
 static long long int start_time = LLONG_MIN;
 static int32_t prev_timer_interval_ms = 0;
 
@@ -1080,21 +1081,21 @@ acl_log_get_stats()
 void
 acl_log_init()
 {
-      acl_log_seqno = seq_read(acl_log_pktrx_seq_get());
-      VLOG_DBG("ACL logging init");
+    acl_log_seqno = seq_read(acl_log_pktrx_seq_get());
+    last_read_seq = acl_log_seqno;
+    VLOG_DBG("ACL logging init");
 }
 
 void
 acl_log_run(struct run_blk_params *blk_params)
 {
-    uint64_t seq;
     uint32_t timer_secs = atoi(ACL_LOG_TIMER_DEFAULT);
     long long int cur_time = time_msec();
     long long int timer_interval_ms;
     const char *timer_interval_str;
     const struct ovsrec_system *ovs;
 
-    seq = seq_read(acl_log_pktrx_seq_get());
+    last_read_seq = seq_read(acl_log_pktrx_seq_get());
 
     /* Get the timer interval from the System table */
     ovs = ovsrec_system_first(blk_params->idl);
@@ -1120,7 +1121,7 @@ acl_log_run(struct run_blk_params *blk_params)
 
         /* We are in the state where we are waiting for packets, but we have
          * not received any packets, so return. */
-        if (seq == acl_log_seqno) {
+        if (last_read_seq == acl_log_seqno) {
             return;
         }
 
@@ -1153,7 +1154,6 @@ acl_log_run(struct run_blk_params *blk_params)
         /* if we can't identify the ACL that this packet matched, take no
          * further action on this packet */
         if (!acl) {
-            acl_log_seqno = seq;
             VLOG_DBG("ACL log packet received but no matching ACL found");
             return;
         } else {
@@ -1163,7 +1163,7 @@ acl_log_run(struct run_blk_params *blk_params)
         /* fill in unknown data about the ACL/ACE */
         if (!(ACL_LOG_LIST_NAME & pkt_buff.pkt_info.valid_fields)) {
                 snprintf(pkt_buff.pkt_info.list_name,
-                        sizeof(pkt_buff.pkt_info.list_name), acl->name);
+                        sizeof(pkt_buff.pkt_info.list_name), "%s", acl->name);
                 pkt_buff.pkt_info.valid_fields |= ACL_LOG_LIST_NAME;
         }
         if (ACL_LOG_LIST_NAME & pkt_buff.pkt_info.valid_fields) {
@@ -1261,12 +1261,13 @@ acl_log_run(struct run_blk_params *blk_params)
         prev_timer_interval_ms = timer_interval_ms;
         poll_timer_wait_until(start_time + timer_interval_ms);
     }
-
-    acl_log_seqno = seq;
 }
 
 void
 acl_log_wait(struct run_blk_params *blk_params)
 {
-    seq_wait(acl_log_pktrx_seq_get(), acl_log_seqno);
+    if (last_read_seq != acl_log_seqno) {
+        seq_wait(acl_log_pktrx_seq_get(), acl_log_seqno);
+        acl_log_seqno = last_read_seq;
+    }
 }
