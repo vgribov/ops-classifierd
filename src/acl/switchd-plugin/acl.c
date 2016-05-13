@@ -290,7 +290,7 @@ acl_create(const struct ovsrec_acl *ovsdb_row, unsigned int seqno)
     acl->in_progress_version = 0;
 
     list_init(&acl->acl_port_map);
-    /* acl->cfg_pi already NULL from xzalloc */
+    acl->cfg_pi = ops_cls_list_new_from_acl(acl);
 
     /* link myself into all the lists/maps I'm supposed to be in */
     hmap_insert(&all_acls_by_uuid, &acl->all_node_uuid, uuid_hash(&acl->uuid));
