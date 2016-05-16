@@ -116,35 +116,39 @@ qos_callback_statistics_netdev(struct stats_blk_params *sblk,
     enum { N_IFACE_QUEUE_STATS = IFACE_QUEUE_STATS };
 #undef IFACE_QUEUE_STAT
     int64_t keys[NUM_QUEUES];
-    int64_t values[N_IFACE_QUEUE_STATS][NUM_QUEUES];
+    int64_t values[NUM_QUEUES];
     int i,j = 0;
 
     struct netdev_queue_stats qstats[NUM_QUEUES];
 
-    /* Intentionally ignore return value, since errors will set 'stats' to
-     * all-1s, and we will deal with that correctly below. */
+    /* Initialize queue statistic structures */
+    for (i = 0; i < NUM_QUEUES; i++) {
+        qstats[i].tx_bytes = UINT64_MAX;
+        qstats[i].tx_packets = UINT64_MAX;
+        qstats[i].tx_errors = UINT64_MAX;
+        qstats[i].created = LLONG_MIN;
+    }
+    /* Dump all queues statistics */
     netdev_dump_queue_stats(netdev,
                             populate_bridge_queue_stats_callback,
                             (void *)qstats);
 
     /* Copy statistics into keys[] and values[]. */
-    for (i=0; i<NUM_QUEUES; i++) {
-        keys[i] = i;
-        j = 0;
 #define IFACE_QUEUE_STAT(MEMBER, NAME)        \
+    j = 0;                                    \
+    for (i = 0; i < NUM_QUEUES; i++) {        \
         if (qstats[i].MEMBER != UINT64_MAX) { \
-            values[j][i] = qstats[i].MEMBER;  \
+            keys[j] = i;                      \
+            values[j] = qstats[i].MEMBER;     \
             j++;                              \
-        }
-        IFACE_QUEUE_STATS;
+        }                                     \
+    }                                         \
+    ovs_assert(j <= NUM_QUEUES);              \
+                                              \
+    ovsrec_interface_set_queue_##MEMBER(cfg, keys, values, j);
+    IFACE_QUEUE_STATS;
 
 #undef IFACE_QUEUE_STAT
-    }
-    ovs_assert(j <= N_IFACE_QUEUE_STATS);
-
-    ovsrec_interface_set_queue_tx_bytes   (cfg, keys, values[0], i);
-    ovsrec_interface_set_queue_tx_packets (cfg, keys, values[1], i);
-    ovsrec_interface_set_queue_tx_errors  (cfg, keys, values[2], i);
 #undef IFACE_QUEUE_STATS
 
 }
