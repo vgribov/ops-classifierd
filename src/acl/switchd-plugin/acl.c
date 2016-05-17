@@ -472,10 +472,12 @@ acl_reconfigure_init(struct blk_params *blk_params)
      */
     if (acls_created || acls_updated || acls_deleted) {
         const struct ovsrec_acl *acl_row_next;
+        bool row_changed;
         OVSREC_ACL_FOR_EACH_SAFE(acl_row, acl_row_next, idl) {
             struct acl *acl = acl_lookup_by_uuid(&acl_row->header_.uuid);
             if (!acl) {
                 acl = acl_create(acl_row, idl_seqno);
+                row_changed = true;
             } else {
                 /* Always update these, even if nothing else has changed,
                  * The ovsdb_row may have changed out from under us.
@@ -485,15 +487,14 @@ acl_reconfigure_init(struct blk_params *blk_params)
                 acl->delete_seqno = idl_seqno;
 
                 /* Check if this is an ACL:[CU] */
-                bool row_changed =
+                row_changed =
                     (OVSREC_IDL_IS_ROW_MODIFIED(acl_row, idl_seqno) ||
                      OVSREC_IDL_IS_ROW_INSERTED(acl_row, idl_seqno));
-
-                if (row_changed && acl_row->in_progress_version[0] >
+            }
+            if (row_changed && acl_row->in_progress_version[0] >
                                    acl->in_progress_version) {
-                    acl_cfg_update(acl);
-                    acl->in_progress_version = acl_row->in_progress_version[0];
-                }
+                acl_cfg_update(acl);
+                acl->in_progress_version = acl_row->in_progress_version[0];
             }
         }
     } else {
