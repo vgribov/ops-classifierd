@@ -45,6 +45,7 @@ show_run_access_list_callback(void *p_private)
     vtysh_ovsdb_cbmsg_ptr p_msg = (vtysh_ovsdb_cbmsg *) p_private;
     const struct ovsrec_system *ovs;
     const struct ovsrec_acl *acl_row;
+    const char *acl_log_timer_value;
     char *ace_str;
     int i;
 
@@ -83,10 +84,9 @@ show_run_access_list_callback(void *p_private)
     }
 
     /* Print log timer configuration (if not default) */
-    if (smap_get(&ovs->other_config, ACL_LOG_TIMER_STR))
-    {
-        vtysh_ovsdb_cli_print(p_msg, "access-list log-timer %s",
-                              smap_get(&ovs->other_config, ACL_LOG_TIMER_STR));
+    acl_log_timer_value = smap_get(&ovs->other_config, ACL_LOG_TIMER_STR);
+    if (acl_log_timer_value) {
+        vtysh_ovsdb_cli_print(p_msg, "access-list log-timer %s", acl_log_timer_value);
     }
     return e_vtysh_ok;
 }

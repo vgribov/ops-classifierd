@@ -1343,12 +1343,25 @@ DEFUN (cli_clear_access_list_hitcounts_all,
 DEFUN (cli_access_list_log_timer, cli_access_list_log_timer_cmd,
        "access-list log-timer (" ACL_LOG_TIMER_DEFAULT_STR "|<" ACL_LOG_TIMER_MIN "-" ACL_LOG_TIMER_MAX ">)",
        ACL_STR
-       "Set ACL log timer length (frequency)\n"
+       "Set " ACL_LOG_TIMER_NAME_STR "\n"
        "Default value (" ACL_LOG_TIMER_DEFAULT " seconds)\n"
        "Specify value (in seconds)\n"
       )
 {
     return cli_set_acl_log_timer(CONST_CAST(char*,argv[0])); /* timer_value */
+}
+
+/**
+ * Action routine for displaying ACL log timer
+ */
+DEFUN (cli_show_access_list_log_timer, cli_show_access_list_log_timer_cmd,
+       "show access-list log-timer",
+       SHOW_STR
+       ACL_STR
+       "Display " ACL_LOG_TIMER_NAME_STR "\n"
+      )
+{
+    return cli_print_acl_log_timer();
 }
 
 /**
@@ -1420,6 +1433,8 @@ access_list_vty_init(void)
     install_element(ENABLE_NODE, &cli_clear_access_list_hitcounts_all_cmd);
 
     install_element(CONFIG_NODE, &cli_access_list_log_timer_cmd);
+    install_element(ENABLE_NODE, &cli_show_access_list_log_timer_cmd);
+    install_element(VIEW_NODE, &cli_show_access_list_log_timer_cmd);
 
     install_element(ACCESS_LIST_NODE, &config_exit_cmd);
     install_element(ACCESS_LIST_NODE, &config_quit_cmd);

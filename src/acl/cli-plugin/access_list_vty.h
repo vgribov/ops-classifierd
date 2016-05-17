@@ -37,6 +37,7 @@
 #define MAX_ACL_NAME_LENGTH 65 /**< 64 character name + NULL-terminator */
 #define IP_VER_STR_LEN 5       /**< "ipv{4|6}" + NULL-terminator */
 #define ACL_TRUE_STR "true"
+#define ACL_LOG_TIMER_NAME_STR "ACL log timer length (frequency)"
 #define ACL_LOG_TIMER_DEFAULT_STR "default"
 
 /* Constants related to ACE sequence numbers */

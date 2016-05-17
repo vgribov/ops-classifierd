@@ -250,6 +250,14 @@ int cli_clear_acl_statistics (const char *acl_type,
 int cli_set_acl_log_timer(const char* timer_value);
 
 /**
+ * Print the configured ACL logging timer value (or "default")
+ *
+ * @retval CMD_SUCCESS           on success
+ * @retval CMD_OVSDB_FAILURE     on database/transaction failure
+ */
+int cli_print_acl_log_timer(void);
+
+/**
  * Initialize ACL OVSDB tables, columns
  */
 void access_list_ovsdb_init(void);

@@ -1219,6 +1219,32 @@ cli_set_acl_log_timer(const char* timer_value)
     }
 }
 
+int
+cli_print_acl_log_timer(void)
+{
+    const struct ovsrec_system *ovs;
+    const char *acl_log_timer_value;
+
+    /* Get System table */
+    ovs = ovsrec_system_first(idl);
+    if (!ovs) {
+        assert(0);
+        return CMD_OVSDB_FAILURE;
+    }
+
+    /* Get ACL log timer configuration */
+    acl_log_timer_value = smap_get(&ovs->other_config, ACL_LOG_TIMER_STR);
+    if (acl_log_timer_value)
+    {
+        vty_out(vty, ACL_LOG_TIMER_NAME_STR ": %s seconds%s",
+                acl_log_timer_value, VTY_NEWLINE);
+    } else {
+        vty_out(vty, ACL_LOG_TIMER_NAME_STR ": %s seconds (Default)%s",
+                ACL_LOG_TIMER_DEFAULT, VTY_NEWLINE);
+    }
+    return CMD_SUCCESS;
+}
+
 void
 access_list_ovsdb_init(void)
 {
