@@ -28,21 +28,6 @@
 #define _ACCESS_LIST_VTY_OVSDB_H
 
 /**
- * Print information about ACL(s) in specified format
- *
- * @param  acl_type  ACL type string
- * @param  acl_name  ACL name string
- * @param  config    Print as configuration input?
- *
- * @retval CMD_SUCCESS           on success
- * @retval CMD_OVSDB_FAILURE     on database/transaction failure
- * @retval CMD_ERR_NOTHING_TODO  on bad parameter/value
- */
-int cli_print_acls(const char *acl_type,
-                   const char *acl_name,
-                   const char *config);
-
-/**
  * Create an ACL if it does not exist
  *
  * @param  acl_type  ACL type string
@@ -144,23 +129,28 @@ int cli_resequence_acl (const char *acl_type,
                         const char *increment);
 
 /**
- * Display ACLs applied to the specified interface in the given direction
+ * Display ACL(s) applied to the specified interface in the given direction
  *
  * @param  interface_type  Interface (Port/VLAN) type string
  * @param  interface_id    Interface (Port/VLAN) identifier string
  * @param  acl_type        ACL type string
+ * @param  acl_name        ACL name string
  * @param  direction       Direction of traffic ACL is applied to
- * @param  config          Print as configuration input?
+ * @param  commands        Print ACL configuration as CLI commands
+ * @param  configuration   Print user-specified configuration
  *
  * @retval CMD_SUCCESS           on success
  * @retval CMD_OVSDB_FAILURE     on database/transaction failure
  * @retval CMD_ERR_NOTHING_TODO  on bad parameter/value
  */
-int cli_print_applied_acls (const char *interface_type,
-                            const char *interface_id,
-                            const char *acl_type,
-                            const char *direction,
-                            const char *config);
+int cli_print_acls (const char *interface_type,
+                    const char *interface_id,
+                    const char *acl_type,
+                    const char *acl_name,
+                    const char *direction,
+                    const char *commands,
+                    const char *configuration);
+
 
 /**
  * Apply an ACL to an interface in a specified direction

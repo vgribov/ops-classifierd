@@ -65,17 +65,17 @@ show_run_access_list_callback(void *p_private)
                                   "ip",
                                   acl_row->name);
             /* Print each ACL entry as a single line (ala CLI input) */
-            for (i = 0; i < acl_row->n_cur_aces; i ++) {
+            for (i = 0; i < acl_row->n_cfg_aces; i ++) {
                 /* If entry has or is a comment, print as its own line */
-                if (acl_row->value_cur_aces[i]->comment) {
+                if (acl_row->value_cfg_aces[i]->comment) {
                     vtysh_ovsdb_cli_print(p_msg,
                                           "    %" PRId64 " comment %s",
-                                          acl_row->key_cur_aces[i],
-                                          acl_row->value_cur_aces[i]->comment);
+                                          acl_row->key_cfg_aces[i],
+                                          acl_row->value_cfg_aces[i]->comment);
                 }
-                if (acl_row->value_cur_aces[i]->action) {
-                    ace_str = acl_entry_config_to_string(acl_row->key_cur_aces[i],
-                                                         acl_row->value_cur_aces[i]);
+                if (acl_row->value_cfg_aces[i]->action) {
+                    ace_str = acl_entry_config_to_string(acl_row->key_cfg_aces[i],
+                                                         acl_row->value_cfg_aces[i]);
                     vtysh_ovsdb_cli_print(p_msg, "    %s", ace_str);
                     free(ace_str);
                 }
@@ -109,16 +109,16 @@ show_run_access_list_subcontext_callback(void *p_private)
     }
 
     /* Print VLAN ACL, if any */
-    if (vlan_row && vlan_row->aclv4_in_applied) {
+    if (vlan_row && vlan_row->aclv4_in_cfg) {
         vtysh_ovsdb_cli_print(p_msg, "    apply access-list ip %s in",
-                              vlan_row->aclv4_in_applied->name);
+                              vlan_row->aclv4_in_cfg->name);
     }
     /* Print port ACL, if any (LAGs won't have interface name == port name) */
     if (interface_row) {
         port_row = get_port_by_name(interface_row->name);
-        if (port_row && port_row->aclv4_in_applied) {
+        if (port_row && port_row->aclv4_in_cfg) {
             vtysh_ovsdb_cli_print(p_msg, "    apply access-list ip %s in",
-                                  port_row->aclv4_in_applied->name);
+                                  port_row->aclv4_in_cfg->name);
         }
     }
     return e_vtysh_ok;

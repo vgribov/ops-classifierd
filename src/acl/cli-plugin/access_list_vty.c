@@ -94,50 +94,79 @@ DEFUN (cli_no_access_list,
  */
 DEFUN (cli_show_access_list,
        cli_show_access_list_cmd,
-       "show access-list { config }",
+       "show access-list { commands | configuration }",
        SHOW_STR
        ACL_STR
+       ACL_CLI_CMD_STR
        ACL_CFG_STR
       )
 {
-    return cli_print_acls(NULL,                       /* Type */
-                          NULL,                       /* Name */
-                          CONST_CAST(char*,argv[0])); /* Config */
+    return cli_print_acls(NULL,                       /* interface_type */
+                          NULL,                       /* interface_id */
+                          NULL,                       /* acl_type */
+                          NULL,                       /* acl_name */
+                          NULL,                       /* direction */
+                          CONST_CAST(char*,argv[0]),  /* commands */
+                          CONST_CAST(char*,argv[1])); /* configuration */
 }
 
 /**
- * Action routine for showing all ACLs of a specified type
+ * Action routine for a single ACL type
  */
 DEFUN (cli_show_access_list_type,
        cli_show_access_list_type_cmd,
-       "show access-list ip { config }",
+       "show access-list (ip) { commands | configuration }",
        SHOW_STR
        ACL_STR
        ACL_IP_STR
+       ACL_CLI_CMD_STR
        ACL_CFG_STR
       )
 {
-    return cli_print_acls("ipv4",                     /* Type */
-                          NULL,                       /* Name */
-                          CONST_CAST(char*,argv[0])); /* Config */
+    const char ipv4_str[] = "ipv4";
+    const char *type_str;
+    if (argv[0] && !strcmp(argv[0], "ip")) {
+        type_str = ipv4_str;
+    } else {
+        type_str = argv[0];
+    }
+    return cli_print_acls(NULL,                       /* interface_type */
+                          NULL,                       /* interface_id */
+                          type_str,                   /* acl_type */
+                          NULL,                       /* acl_name */
+                          NULL,                       /* direction */
+                          CONST_CAST(char*,argv[1]),  /* commands */
+                          CONST_CAST(char*,argv[2])); /* configuration */
 }
 
 /**
- * Action routine for showing a single ACL (specified name + type)
+ * Action routine for a single ACL specified by type and name
  */
 DEFUN (cli_show_access_list_type_name,
        cli_show_access_list_type_name_cmd,
-       "show access-list ip NAME { config }",
+       "show access-list (ip) NAME { commands | configuration }",
        SHOW_STR
        ACL_STR
        ACL_IP_STR
        ACL_NAME_STR
+       ACL_CLI_CMD_STR
        ACL_CFG_STR
       )
 {
-    return cli_print_acls("ipv4",                     /* Type */
-                          CONST_CAST(char*,argv[0]),  /* Name */
-                          CONST_CAST(char*,argv[1])); /* Config */
+    const char ipv4_str[] = "ipv4";
+    const char *type_str;
+    if (argv[0] && !strcmp(argv[0], "ip")) {
+        type_str = ipv4_str;
+    } else {
+        type_str = argv[0];
+    }
+    return cli_print_acls(NULL,                       /* interface_type */
+                          NULL,                       /* interface_id */
+                          type_str,                   /* acl_type */
+                          CONST_CAST(char*,argv[1]),  /* acl_name */
+                          NULL,                       /* direction */
+                          CONST_CAST(char*,argv[2]),  /* commands */
+                          CONST_CAST(char*,argv[3])); /* configuration */
 }
 
 /**
@@ -1121,10 +1150,10 @@ ALIAS (cli_no_access_list_entry,
       )
 
 /**
- * Action routine for showing applications of ACLs
+ * Action routine for showing specific applications of ACLs
  */
 DEFUN (cli_show_access_list_applied, cli_show_access_list_applied_cmd,
-       "show access-list (interface|vlan) ID { ip | in | config }",
+       "show access-list (interface|vlan) ID { ip | in | commands | configuration }",
        SHOW_STR
        ACL_STR
        ACL_INTERFACE_STR
@@ -1132,6 +1161,7 @@ DEFUN (cli_show_access_list_applied, cli_show_access_list_applied_cmd,
        ACL_INTERFACE_ID_STR
        ACL_IP_STR
        ACL_IN_STR
+       ACL_CLI_CMD_STR
        ACL_CFG_STR
       )
 {
@@ -1142,11 +1172,13 @@ DEFUN (cli_show_access_list_applied, cli_show_access_list_applied_cmd,
     } else {
         type_str = argv[2];
     }
-    return cli_print_applied_acls(CONST_CAST(char*,argv[0]),  /* interface type */
-                                  CONST_CAST(char*,argv[1]),  /* interface id */
-                                  CONST_CAST(char*,type_str), /* type */
-                                  CONST_CAST(char*,argv[3]),  /* direction */
-                                  CONST_CAST(char*,argv[4])); /* config */
+    return cli_print_acls(CONST_CAST(char*,argv[0]),  /* interface type */
+                          CONST_CAST(char*,argv[1]),  /* interface id */
+                          CONST_CAST(char*,type_str), /* acl_type */
+                          NULL,                       /* acl_name */
+                          CONST_CAST(char*,argv[3]),  /* direction */
+                          CONST_CAST(char*,argv[4]),  /* commands */
+                          CONST_CAST(char*,argv[5])); /* configuration */
 }
 
 /**

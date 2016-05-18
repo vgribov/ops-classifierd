@@ -48,52 +48,6 @@ VLOG_DEFINE_THIS_MODULE(vtysh_access_list_cli_ovsdb);
 extern struct ovsdb_idl *idl;
 
 int
-cli_print_acls(const char *acl_type, const char *acl_name, const char *config)
-{
-    const struct ovsrec_system *ovs;
-    const struct ovsrec_acl *acl_row;
-
-    /* Get System table */
-    ovs = ovsrec_system_first(idl);
-    if (!ovs) {
-        assert(0);
-        return CMD_OVSDB_FAILURE;
-    }
-
-    /* ACL specified, print just one */
-    if (acl_type && acl_name) {
-        acl_row = get_acl_by_type_name(acl_type, acl_name);
-        if (!acl_row) {
-            vty_out(vty, "%% ACL does not exist%s", VTY_NEWLINE);
-            return CMD_ERR_NOTHING_TODO;
-        }
-        if (!config) {
-            print_acl_tabular_header();
-            print_acl_horizontal_rule();
-            print_acl_tabular(acl_row);
-        } else {
-            print_acl_config(acl_row);
-        }
-    /* Print all ACLs */
-    } else {
-        if (!config && ovs->n_acls) {
-            print_acl_tabular_header();
-            OVSREC_ACL_FOR_EACH(acl_row, idl) {
-                print_acl_horizontal_rule();
-                print_acl_tabular(acl_row);
-            }
-            print_acl_horizontal_rule();
-        } else {
-            OVSREC_ACL_FOR_EACH(acl_row, idl) {
-                print_acl_config(acl_row);
-            }
-        }
-    }
-
-    return CMD_SUCCESS;
-}
-
-int
 cli_create_acl_if_needed(const char *acl_type, const char *acl_name)
 {
     struct ovsdb_idl_txn *transaction;
@@ -293,9 +247,9 @@ cli_create_update_ace (const char *acl_type,
     /* Otherwise set sequence number to the current highest + auto-increment */
     } else {
         int64_t highest_ace_seq = 0;
-        if (acl_row->n_cur_aces > 0) {
+        if (acl_row->n_cfg_aces > 0) {
             /* ACEs are stored sorted, so just get the last one */
-            highest_ace_seq = acl_row->key_cur_aces[acl_row->n_cur_aces - 1];
+            highest_ace_seq = acl_row->key_cfg_aces[acl_row->n_cfg_aces - 1];
         }
         if (highest_ace_seq + ACE_SEQ_AUTO_INCR > ACE_SEQ_MAX) {
             vty_out(vty, "%% Unable to automatically set sequence number%s", VTY_NEWLINE);
@@ -316,7 +270,7 @@ cli_create_update_ace (const char *acl_type,
 
     /* Updating an ACE always (except comments) creates a new row.
        If the old ACE is no longer referenced it will be garbage-collected. */
-    old_ace_row = ovsrec_acl_cur_aces_getvalue(acl_row, ace_sequence_number);
+    old_ace_row = ovsrec_acl_cfg_aces_getvalue(acl_row, ace_sequence_number);
     if (old_ace_row) {
         VLOG_DBG("Updating ACE seq=%" PRId64, ace_sequence_number);
 
@@ -491,7 +445,7 @@ cli_create_update_ace (const char *acl_type,
     }
 
     /* Update ACL (parent) table */
-    ovsrec_acl_set_cfg_aces_from_cur_aces(acl_row, ace_sequence_number, (struct ovsrec_acl_entry *) ace_row);
+    ovsrec_acl_update_cfg_aces_setkey(acl_row, ace_sequence_number, (struct ovsrec_acl_entry *) ace_row);
     pending_cfg_version = acl_row->cfg_version[0] + 1;
     ovsrec_acl_set_cfg_version(acl_row, &pending_cfg_version, 1);
 
@@ -502,8 +456,7 @@ cli_create_update_ace (const char *acl_type,
         return CMD_OVSDB_FAILURE;
     }
 
-    /* Wait until ACE update either succeeds or fails and report to user */
-    return wait_for_ace_update_status(acl_type, acl_name, pending_cfg_version);
+    return CMD_SUCCESS;
 }
 
 int
@@ -544,11 +497,12 @@ cli_delete_ace (const char *acl_type,
     /* Check to make sure ACE is present in ACL */
 
     VLOG_DBG("Deleting ACE seq=%" PRId64, ace_sequence_number);
-    if (!ovsrec_acl_set_cfg_aces_from_cur_aces(acl_row, ace_sequence_number, NULL)) {
+    if (!ovsrec_acl_cfg_aces_getvalue(acl_row, ace_sequence_number)) {
         vty_out(vty, "%% ACL entry does not exist%s", VTY_NEWLINE);
         cli_do_config_abort(transaction);
         return CMD_ERR_NOTHING_TODO;
     }
+    ovsrec_acl_update_cfg_aces_delkey(acl_row, ace_sequence_number);
     pending_cfg_version = acl_row->cfg_version[0] + 1;
     ovsrec_acl_set_cfg_version(acl_row, &pending_cfg_version, 1);
     /* If ACE is no longer referenced it will be garbage-collected */
@@ -560,8 +514,7 @@ cli_delete_ace (const char *acl_type,
         return CMD_OVSDB_FAILURE;
     }
 
-    /* Wait until ACE update either succeeds or fails and report to user */
-    return wait_for_ace_update_status(acl_type, acl_name, pending_cfg_version);
+    return CMD_SUCCESS;
 }
 
 int
@@ -595,7 +548,7 @@ cli_resequence_acl (const char *acl_type,
     }
 
     /* Check for an empty list */
-    if (!acl_row->n_cur_aces) {
+    if (!acl_row->n_cfg_aces) {
         vty_out(vty, "%% ACL is empty%s", VTY_NEWLINE);
         cli_do_config_abort(transaction);
         return CMD_ERR_NOTHING_TODO;
@@ -612,25 +565,25 @@ cli_resequence_acl (const char *acl_type,
      *   input should be accepted
      *   resequence should result in ACE #5 seq=4294967295
      */
-    if (start_num + ((acl_row->n_cur_aces - 1) * increment_num) > ACE_SEQ_MAX) {
+    if (start_num + ((acl_row->n_cfg_aces - 1) * increment_num) > ACE_SEQ_MAX) {
         vty_out(vty, "%% Sequence numbers would exceed maximum%s", VTY_NEWLINE);
         cli_do_config_abort(transaction);
         return CMD_ERR_NOTHING_TODO;
     }
 
     /* Initialize temporary data structures */
-    key_list = xmalloc(sizeof(int64_t) * (acl_row->n_cur_aces));
-    value_list = xmalloc(sizeof *acl_row->value_cur_aces * (acl_row->n_cur_aces));
+    key_list = xmalloc(sizeof(int64_t) * (acl_row->n_cfg_aces));
+    value_list = xmalloc(sizeof *acl_row->value_cfg_aces * (acl_row->n_cfg_aces));
 
     /* Walk through sorted list, resequencing by adding into new_aces */
-    for (i = 0; i < acl_row->n_cur_aces; i++) {
+    for (i = 0; i < acl_row->n_cfg_aces; i++) {
         key_list[i] = current_num;
-        value_list[i] = acl_row->value_cur_aces[i];
+        value_list[i] = acl_row->value_cfg_aces[i];
         current_num += increment_num;
     }
 
     /* Replace ACL's entries with resequenced ones */
-    ovsrec_acl_set_cfg_aces(acl_row, key_list, value_list, acl_row->n_cur_aces);
+    ovsrec_acl_set_cfg_aces(acl_row, key_list, value_list, acl_row->n_cfg_aces);
     pending_cfg_version = acl_row->cfg_version[0] + 1;
     ovsrec_acl_set_cfg_version(acl_row, &pending_cfg_version, 1);
 
@@ -645,85 +598,152 @@ cli_resequence_acl (const char *acl_type,
         return CMD_OVSDB_FAILURE;
     }
 
-    /* Wait until ACE update either succeeds or fails and report to user */
-    return wait_for_ace_update_status(acl_type, acl_name, pending_cfg_version);
+    return CMD_SUCCESS;
 }
 
 int
-cli_print_applied_acls (const char *interface_type,
-                        const char *interface_id,
-                        const char *acl_type,
-                        const char *direction,
-                        const char *config)
+cli_print_acls (const char *interface_type,
+                const char *interface_id,
+                const char *acl_type,
+                const char *acl_name,
+                const char *direction,
+                const char *commands,
+                const char *configuration)
 {
-    /* Port (unfortunately called "interface" in the CLI) */
-    if (!strcmp(interface_type, "interface")) {
-        const struct ovsrec_port *port_row;
+    const struct ovsrec_system *ovs;
+    const struct ovsrec_acl *acl_row = NULL;
+    const struct ovsrec_port *port_row = NULL;
+    const struct ovsrec_vlan *vlan_row = NULL;
+    char vlan_id_str[21]; /* Max string length of 64-bit number +1 for NULL */
 
-        /* Get Port row */
+    /* Get System table */
+    ovs = ovsrec_system_first(idl);
+    if (!ovs) {
+        assert(0);
+        return CMD_OVSDB_FAILURE;
+    }
+
+    /* Print single ACL specified by type and name */
+    if (acl_type && acl_name) {
+        acl_row = get_acl_by_type_name(acl_type, acl_name);
+        if (!acl_row) {
+            vty_out(vty, "%% ACL does not exist%s", VTY_NEWLINE);
+            return CMD_ERR_NOTHING_TODO;
+        }
+        /* Print tabular */
+        if (!commands) {
+            print_acl_tabular_header();
+            print_acl_horizontal_rule();
+            print_acl_tabular(acl_row, configuration);
+            print_acl_horizontal_rule();
+        /* Print commands (including apply statements) */
+        } else {
+            print_acl_commands(acl_row, configuration);
+            OVSREC_PORT_FOR_EACH(port_row, idl) {
+                if (!configuration && port_row->aclv4_in_applied == acl_row) {
+                    print_acl_apply_commands("interface", port_row->name, "in", port_row->aclv4_in_applied);
+                } else if (port_row->aclv4_in_cfg == acl_row) {
+                    print_acl_apply_commands("interface", port_row->name, "in", port_row->aclv4_in_cfg);
+                }
+            }
+            OVSREC_VLAN_FOR_EACH(vlan_row, idl) {
+                sprintf(vlan_id_str, "%" PRId64, vlan_row->id);
+                if (!configuration && vlan_row->aclv4_in_applied == acl_row) {
+                    print_acl_apply_commands("vlan", vlan_id_str, "in", vlan_row->aclv4_in_applied);
+                } else if (vlan_row->aclv4_in_cfg == acl_row) {
+                    print_acl_apply_commands("vlan", vlan_id_str, "in", vlan_row->aclv4_in_cfg);
+                }
+            }
+        }
+
+    /* Print all ACLs applied to specified Port ("interface" in the CLI) */
+    } else if (interface_type && !strcmp(interface_type, "interface")) {
         port_row = get_port_by_name(interface_id);
         if (!port_row) {
             vty_out(vty, "%% Port does not exist%s", VTY_NEWLINE);
             return CMD_ERR_NOTHING_TODO;
         }
-
-        if (port_row->aclv4_in_applied) {
-            VLOG_DBG("Found ACL application port=%s name=%s",
-                     interface_id, port_row->aclv4_in_applied->name);
-            if (config)
-            {
-                print_acl_config(port_row->aclv4_in_applied);
-            } else {
+        /* Print applied ACL unless user specified "configuration" */
+        if (!configuration) {
+            acl_row = port_row->aclv4_in_applied;
+        } else {
+            acl_row = port_row->aclv4_in_cfg;
+        }
+        if (acl_row) {
+            /* Print tabular */
+            if (!commands) {
                 vty_out(vty, "%-10s %-31s%s", "Direction", "", VTY_NEWLINE);
                 print_acl_tabular_header();
                 print_acl_horizontal_rule();
                 vty_out(vty, "%-10s %-31s%s", "Inbound", "", VTY_NEWLINE);
-                print_acl_tabular(port_row->aclv4_in_applied);
+                print_acl_tabular(acl_row, configuration);
                 print_acl_horizontal_rule();
+            /* Print commands (including apply statements) */
+            } else {
+                print_acl_commands(acl_row, configuration);
+                print_acl_apply_commands(interface_type, interface_id, "in", acl_row);
             }
         }
 
-        /* Print application commands if printing config */
-        if (config && port_row->aclv4_in_applied) {
-            vty_out(vty, "%s %s\n    %s %s %s %s %s%s",
-                    "interface", port_row->name,
-                    "apply", "access-list", "ip",
-                    port_row->aclv4_in_applied->name, "in",
-                    VTY_NEWLINE);
-        }
-    } else if (!strcmp(interface_type, "vlan")) {
-        const struct ovsrec_vlan *vlan_row;
-
-        /* Get VLAN row */
+    /* Print all ACLs applied to specified VLAN */
+    } else if (interface_type && !strcmp(interface_type, "vlan")) {
         vlan_row = get_vlan_by_id_str(interface_id);
         if (!vlan_row) {
             vty_out(vty, "%% VLAN does not exist%s", VTY_NEWLINE);
             return CMD_ERR_NOTHING_TODO;
         }
-
-        if (vlan_row->aclv4_in_applied) {
-            VLOG_DBG("Found ACL application vlan=%s name=%s",
-                     interface_id, vlan_row->aclv4_in_applied->name);
-            if (config)
-            {
-                print_acl_config(vlan_row->aclv4_in_applied);
-            } else {
+        /* Print applied ACL unless user specified "configuration" */
+        if (!configuration) {
+            acl_row = vlan_row->aclv4_in_applied;
+        } else {
+            acl_row = vlan_row->aclv4_in_cfg;
+        }
+        if (acl_row) {
+            /* Print tabular */
+            if (!commands) {
                 vty_out(vty, "%-10s %-31s%s", "Direction", "", VTY_NEWLINE);
                 print_acl_tabular_header();
                 print_acl_horizontal_rule();
                 vty_out(vty, "%-10s %-31s%s", "Inbound", "", VTY_NEWLINE);
-                print_acl_tabular(vlan_row->aclv4_in_applied);
+                print_acl_tabular(acl_row, configuration);
                 print_acl_horizontal_rule();
+            /* Print commands (including apply statements) */
+            } else {
+                print_acl_commands(acl_row, configuration);
+                print_acl_apply_commands(interface_type, interface_id, "in", acl_row);
             }
         }
 
-        /* Print application commands if printing config */
-        if (config && vlan_row->aclv4_in_applied) {
-            vty_out(vty, "%s %" PRId64 "\n    %s %s %s %s %s%s",
-                    "vlan", vlan_row->id,
-                    "apply", "access-list", "ip",
-                    vlan_row->aclv4_in_applied->name, "in",
-                    VTY_NEWLINE);
+    /* Print all ACLs (applied or not) */
+    } else {
+        if (ovs->n_acls) {
+            if (!commands) {
+                print_acl_tabular_header();
+                OVSREC_ACL_FOR_EACH(acl_row, idl) {
+                    print_acl_horizontal_rule();
+                    print_acl_tabular(acl_row, configuration);
+                }
+                print_acl_horizontal_rule();
+            } else {
+                OVSREC_ACL_FOR_EACH(acl_row, idl) {
+                    print_acl_commands(acl_row, configuration);
+                }
+                OVSREC_PORT_FOR_EACH(port_row, idl) {
+                    if (!configuration && port_row->aclv4_in_applied) {
+                        print_acl_apply_commands("interface", port_row->name, "in", port_row->aclv4_in_applied);
+                    } else if (configuration && port_row->aclv4_in_cfg) {
+                        print_acl_apply_commands("interface", port_row->name, "in", port_row->aclv4_in_cfg);
+                    }
+                }
+                OVSREC_VLAN_FOR_EACH(vlan_row, idl) {
+                    sprintf(vlan_id_str, "%" PRId64, vlan_row->id);
+                    if (!configuration && vlan_row->aclv4_in_applied) {
+                        print_acl_apply_commands("vlan", vlan_id_str, "in", vlan_row->aclv4_in_applied);
+                    } else if (configuration && vlan_row->aclv4_in_cfg) {
+                        print_acl_apply_commands("vlan", vlan_id_str, "in", vlan_row->aclv4_in_cfg);
+                    }
+                }
+            }
         }
     }
 
@@ -771,12 +791,12 @@ cli_apply_acl (const char *interface_type,
         }
 
         if (!strcmp(acl_type, "ipv4") && !strcmp(direction, "in")) {
-            /* Check if we're replacing an already-applied ACL */
-            if (port_row->aclv4_in_applied) {
+            /* Check if we're replacing an already-configured ACL */
+            if (port_row->aclv4_in_cfg) {
                 VLOG_DBG("Old ACL application port=%s acl_name=%s",
-                         interface_id, port_row->aclv4_in_applied->name);
+                         interface_id, port_row->aclv4_in_cfg->name);
             }
-            /* Apply the requested ACL to the Port */
+            /* Configure the requested ACL for the Port */
             VLOG_DBG("New ACL application port=%s acl_name=%s", interface_id, acl_name);
             ovsrec_port_set_aclv4_in_cfg(port_row, acl_row);
             if (port_row->n_aclv4_in_cfg_version) {
@@ -803,13 +823,13 @@ cli_apply_acl (const char *interface_type,
         }
 
         if (!strcmp(acl_type, "ipv4") && !strcmp(direction, "in")) {
-            /* Check if we're replacing an already-applied ACL */
-            if (vlan_row->aclv4_in_applied) {
+            /* Check if we're replacing an already-configured ACL */
+            if (vlan_row->aclv4_in_cfg) {
                 VLOG_DBG("Old ACL application vlan=%s acl_name=%s",
-                         interface_id, vlan_row->aclv4_in_applied->name);
+                         interface_id, vlan_row->aclv4_in_cfg->name);
             }
 
-            /* Apply the requested ACL to the VLAN */
+            /* Configure the requested ACL for the VLAN */
             VLOG_DBG("New ACL application vlan=%s acl_name=%s", interface_id, acl_name);
             ovsrec_vlan_set_aclv4_in_cfg(vlan_row, acl_row);
             if (vlan_row->n_aclv4_in_cfg_version) {
@@ -832,10 +852,7 @@ cli_apply_acl (const char *interface_type,
         return CMD_OVSDB_FAILURE;
     }
 
-    /* Wait until ACL apply either succeeds or fails and report to user */
-    return wait_for_acl_apply_status(interface_type, interface_id,
-                                     acl_type, direction,
-                                     pending_cfg_version);
+    return CMD_SUCCESS;
 }
 
 int
@@ -849,6 +866,8 @@ cli_unapply_acl (const char *interface_type,
     enum ovsdb_idl_txn_status txn_status;
     const struct ovsrec_acl *acl_row;
     int64_t pending_cfg_version;
+
+    VLOG_DBG("Un-apply");
 
     /* Start transaction */
     transaction = cli_do_config_start();
@@ -877,24 +896,25 @@ cli_unapply_acl (const char *interface_type,
         }
 
         if (!strcmp(acl_type, "ipv4") && !strcmp(direction, "in")) {
-            /* Check that any ACL is currently applied to the port */
-            if (!port_row->aclv4_in_applied) {
-                vty_out(vty, "%% No ACL is applied to port %s", VTY_NEWLINE);
+            /* Check that an ACL is currently configured for the port */
+            if (!port_row->aclv4_in_cfg) {
+                vty_out(vty, "%% No ACL is configured for port %s%s",
+                        port_row->name, VTY_NEWLINE);
                 cli_do_config_abort(transaction);
                 return CMD_ERR_NOTHING_TODO;
             }
 
-            /* Check that the requested ACL to remove is the one applied to port */
-            if (strcmp(acl_name, port_row->aclv4_in_applied->name)) {
+            /* Check that the ACL to remove is the one configured for the port */
+            if (strcmp(acl_name, port_row->aclv4_in_cfg->name)) {
                 vty_out(vty, "%% ACL %s is applied to port %s, not %s%s",
-                        port_row->aclv4_in_applied->name,
+                        port_row->aclv4_in_cfg->name,
                         port_row->name, acl_name, VTY_NEWLINE);
                 cli_do_config_abort(transaction);
                 return CMD_ERR_NOTHING_TODO;
             }
 
-            /* Un-apply the requested ACL application from the Port */
-            VLOG_DBG("Removing ACL application port=%s acl_name=%s", interface_id, acl_name);
+            /* Un-configure the requested ACL from the Port */
+            VLOG_DBG("Removing ACL apply port=%s acl_name=%s", interface_id, acl_name);
             ovsrec_port_set_aclv4_in_cfg(port_row, NULL);
             if (port_row->n_aclv4_in_cfg_version) {
                 pending_cfg_version = port_row->aclv4_in_cfg_version[0] + 1;
@@ -920,24 +940,25 @@ cli_unapply_acl (const char *interface_type,
         }
 
         if (!strcmp(acl_type, "ipv4") && !strcmp(direction, "in")) {
-            /* Check that any ACL is currently applied to the VLAN */
-            if (!vlan_row->aclv4_in_applied) {
-                vty_out(vty, "%% No ACL is applied to VLAN %s", VTY_NEWLINE);
+            /* Check that any ACL is currently configured for the VLAN */
+            if (!vlan_row->aclv4_in_cfg) {
+                vty_out(vty, "%% No ACL is currently configured for VLAN %" PRId64 "%s",
+                        vlan_row->id,VTY_NEWLINE);
                 cli_do_config_abort(transaction);
                 return CMD_ERR_NOTHING_TODO;
             }
 
-            /* Check that the requested ACL to remove is the one applied to vlan */
-            if (strcmp(acl_name, vlan_row->aclv4_in_applied->name)) {
-                vty_out(vty, "%% ACL %s is applied to VLAN %" PRId64 ", not %s%s",
-                        vlan_row->aclv4_in_applied->name,
+            /* Check that the ACL to remove is the one configured for the VLAN */
+            if (strcmp(acl_name, vlan_row->aclv4_in_cfg->name)) {
+                vty_out(vty, "%% ACL %s is configured for VLAN %" PRId64 ", not %s%s",
+                        vlan_row->aclv4_in_cfg->name,
                         vlan_row->id, acl_name, VTY_NEWLINE);
                 cli_do_config_abort(transaction);
                 return CMD_ERR_NOTHING_TODO;
             }
 
-            /* Un-apply the requested ACL application from the VLAN */
-            VLOG_DBG("Removing ACL application vlan=%s acl_name=%s", interface_id, acl_name);
+            /* Un-configure the requested ACL from the VLAN */
+            VLOG_DBG("Removing ACL apply vlan=%s acl_name=%s", interface_id, acl_name);
             ovsrec_vlan_set_aclv4_in_cfg(vlan_row, NULL);
             if (vlan_row->n_aclv4_in_cfg_version) {
                 pending_cfg_version = vlan_row->aclv4_in_cfg_version[0] + 1;
@@ -959,10 +980,7 @@ cli_unapply_acl (const char *interface_type,
         return CMD_OVSDB_FAILURE;
     }
 
-    /* Wait until ACL un-apply either succeeds or fails and report to user */
-    return wait_for_acl_apply_status(interface_type, interface_id,
-                                     acl_type, direction,
-                                     pending_cfg_version);
+    return CMD_SUCCESS;
 }
 
 int

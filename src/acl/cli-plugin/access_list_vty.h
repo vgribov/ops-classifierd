@@ -52,7 +52,8 @@
 /* Common help strings */
 #define ACL_STR "Access control list (ACL)\n"
 #define ACL_NAME_STR "ACL name\n"
-#define ACL_CFG_STR "Display ACL configuration as CLI commands\n"
+#define ACL_CLI_CMD_STR "Format output as CLI commands\n"
+#define ACL_CFG_STR "Display user-specified configuration\n"
 #define ACL_HITCOUNTS_STR "Hit counts (statistics)\n"
 #define ACL_IN_STR "Inbound (ingress) traffic\n"
 #define ACL_APPLY_STR "Apply a configuration record\n"

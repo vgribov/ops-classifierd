@@ -46,7 +46,7 @@ const struct ovsrec_acl *get_acl_by_type_name(const char *acl_type,
  *
  * @return          Pointer to ovsrec_port structure object
  */
-const struct ovsrec_port * get_port_by_name(const char *name);
+const struct ovsrec_port *get_port_by_name(const char *name);
 
 /**
  * Look up a VLAN by ID (in string form)
@@ -58,14 +58,14 @@ const struct ovsrec_port * get_port_by_name(const char *name);
 const struct ovsrec_vlan *get_vlan_by_id_str(const char *id_str);
 
 /**
- * Look up an ACE by key (sequence number) in current ACEs
+ * Look up an ACE by key (sequence number) in configured ACEs
  *
  * @param  acl_row         ACL row pointer
  * @param  sequence_number ACE sequence number
  *
  * @return                 Pointer to ovsrec_acl_entry structure object
  */
-const struct ovsrec_acl_entry *ovsrec_acl_cur_aces_getvalue(const struct ovsrec_acl *acl_row,
+const struct ovsrec_acl_entry *ovsrec_acl_cfg_aces_getvalue(const struct ovsrec_acl *acl_row,
                                                             const int64_t key);
 
 /**
@@ -111,18 +111,28 @@ char *acl_entry_config_to_string(const int64_t sequence_num,
  * @retval CMD_OVSDB_FAILURE     on database/transaction failure
  * @retval CMD_ERR_NOTHING_TODO  on ACE capacity failure
  */
-int check_ace_capacity (const struct ovsrec_acl *acl_row,
-                        const struct ovsrec_acl_entry *ace_row);
+int check_ace_capacity(const struct ovsrec_acl *acl_row,
+                       const struct ovsrec_acl_entry *ace_row);
 
 /**
  * Print an ACL's configuration as if it were entered into the CLI
  *
- * @param acl_row Pointer to ACL row
+ * @param acl_row        Pointer to ACL to print
+ * @param configuration  Print user-specified configuration
  *
  * @sa show_run_access_list_callback A similar function that uses a different
  *                                   print method
  */
-void print_acl_config(const struct ovsrec_acl *acl_row);
+void print_acl_commands(const struct ovsrec_acl *acl_row,
+                        const char *configuration);
+
+/**
+ * Print ACL apply configurations as if it were entered into the CLI
+ */
+void print_acl_apply_commands(const char *interface_type,
+                              const char *interface_id,
+                              const char *direction,
+                              const struct ovsrec_acl *acl_row);
 
 /**
  * Print an ACL's configuration in a tabular format
@@ -130,9 +140,11 @@ void print_acl_config(const struct ovsrec_acl *acl_row);
  * This function isn't pretty, but this is the only place this formatting style
  * is used, so there's not a lot of re-use to be gained by breaking it up now.
  *
- * @param acl_row Pointer to ACL to print
+ * @param acl_row        Pointer to ACL to print
+ * @param configuration  Print user-specified configuration
  */
-void print_acl_tabular(const struct ovsrec_acl *acl_row);
+void print_acl_tabular(const struct ovsrec_acl *acl_row,
+                       const char *configuration);
 
 /**
  * Print inbound IPv4 statistics for any ACLs applied to a given Port
@@ -147,51 +159,5 @@ void print_port_aclv4_in_statistics(const struct ovsrec_port *port_row);
  * @param vlan_row Pointer to VLAN row
  */
 void print_vlan_aclv4_in_statistics(const struct ovsrec_vlan *vlan_row);
-
-/**
- * Take ACL Entries from an ACL's cur_aces, copy them into cfg_aces, and update
- * the provided entry with a new value.
- *
- * @param acl_row ACL row pointer
- * @param key     numeric key (entry sequence number)
- * @param value   ACL Entry row pointer (NULL indicates delete)
- *
- * @return        false if attempting to delete a non-existent entry,
- *                true otherwise
- */
-bool ovsrec_acl_set_cfg_aces_from_cur_aces(const struct ovsrec_acl *acl_row,
-                                           const int64_t key,
-                                           struct ovsrec_acl_entry *value);
-
-/**
- * Wait for an ACL matching the given type and name to have a status for the
- * given configuration version.
- *
- * @param  acl_type             Type string
- * @param  acl_name             Name string
- * @param  pending_cfg_version  Configuration version to wait for status on
- *
- * @retval CMD_SUCCESS on success
- * @retval CMD_WARNING if the operation may not have succeeded
- */
-int wait_for_ace_update_status(const char *acl_type,
-                               const char *acl_name,
-                               const int64_t pending_cfg_version);
-
-/**
- * Wait for an inteface (e.g. port or VLAN) matching the given type and ID and
- * ACL type and direction to have a status for the given configuration version.
- *
- * @param  interface_type       Interface (Port/VLAN) type string
- * @param  interface_id         Interface (Port/VLAN) identifier string
- * @param  acl_type             ACL type string
- * @param  direction            Direction of traffic ACL is applied to
- * @param  pending_cfg_version  Configuration version to wait for status on
- */
-int wait_for_acl_apply_status(const char *interface_type,
-                              const char *interface_id,
-                              const char *acl_type,
-                              const char *direction,
-                              const int64_t pending_cfg_version);
 
 #endif /* _ACCESS_LIST_VTY_OVSDB_UTIL_H */

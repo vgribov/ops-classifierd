@@ -32,7 +32,7 @@
  *
  * @return           e_vtysh_ok on success
  *
- * @sa print_acl_config A similar function that uses a different print method
+ * @sa print_acl_commands A similar function that uses a different print method
  */
 vtysh_ret_val show_run_access_list_callback(void *p_private);
 
