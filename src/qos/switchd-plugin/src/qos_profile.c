@@ -36,6 +36,46 @@ static bool global_schedule_profile_changed = false;
 
 /* Queue and Schedule profiles. */
 
+/* free the memory associated with the queue-profile settings parameter */
+static void
+qos_free_queue_profile_settings(struct queue_profile_settings *settings)
+{
+    int q_index;
+    int lp_index;
+    struct queue_profile_entry *qp_entry;
+
+    if (settings) {
+        /* free up all the settings allocations */
+        if (settings->entries) {
+            for (q_index = 0; q_index < settings->n_entries; q_index++) {
+
+                /* handle each queue entry */
+                qp_entry = settings->entries[q_index];
+                if (qp_entry && qp_entry->local_priorities) {
+                    for (lp_index = 0;
+                          lp_index < qp_entry->n_local_priorities;
+                          lp_index++ ) {
+
+                        /* free each local priority entry */
+                        free(qp_entry->local_priorities[lp_index]);
+                    }
+                }
+
+                /* free the variable-length local-priority pointer array */
+                free(qp_entry->local_priorities);
+
+                /* then free the queue entry itself */
+                free(qp_entry);
+            }
+        }
+
+        /* finally, free up the settings parameter itself */
+        free(settings->entries);
+        free(settings);
+    }
+    return;
+}
+
 /* Construct queue-profile_settings parameter for API call. */
 static struct queue_profile_settings *
 qos_get_queue_profile_settings(const struct ovsrec_q_profile *ovsrec_q_profile)
@@ -53,11 +93,17 @@ qos_get_queue_profile_settings(const struct ovsrec_q_profile *ovsrec_q_profile)
     }
 
     /* start constructing the variable-length settings for the API call */
-    settings = calloc(1, sizeof*settings);
+    settings = calloc(1, sizeof *settings);
+    if (settings == NULL) {
+        return NULL;
+    }
 
     settings->n_entries = (int)ovsrec_q_profile->n_q_profile_entries;
     settings->entries = malloc(settings->n_entries * sizeof(void *));
-
+    if (settings->entries == NULL) {
+        free(settings);
+        return NULL;
+    }
     VLOG_DBG("%s %s %d", __FUNCTION__,
              ovsrec_q_profile->name, settings->n_entries);
 
@@ -66,6 +112,10 @@ qos_get_queue_profile_settings(const struct ovsrec_q_profile *ovsrec_q_profile)
 
         /* each queue gets a separate entry in settings parameter */
         qp_entry = calloc(1, sizeof(struct queue_profile_entry));
+        if (qp_entry == NULL) {
+            qos_free_queue_profile_settings(settings);
+            return NULL;
+        }
         settings->entries[q_index] = qp_entry;
         qp_entry->queue =
             (unsigned)ovsrec_q_profile->key_q_profile_entries[q_index];
@@ -83,6 +133,10 @@ qos_get_queue_profile_settings(const struct ovsrec_q_profile *ovsrec_q_profile)
             qp_entry->local_priorities =
                         calloc(ovsrec_q_profile_entry->n_local_priorities,
                                sizeof(void *));
+            if (qp_entry->local_priorities == NULL) {
+                qos_free_queue_profile_settings(settings);
+                return NULL;
+            }
 
             /* now handle each local priority for this queue */
             for (lp_index = 0;
@@ -91,6 +145,10 @@ qos_get_queue_profile_settings(const struct ovsrec_q_profile *ovsrec_q_profile)
 
                 struct local_priority_entry *lp_entry;
                 lp_entry = calloc(1, sizeof(struct local_priority_entry));
+                if (lp_entry == NULL) {
+                    qos_free_queue_profile_settings(settings);
+                    return NULL;
+                }
                 qp_entry->local_priorities[lp_index] = lp_entry;
                 if (ovsrec_q_profile_entry->local_priorities[lp_index]) {
                     lp_entry->local_priority = (unsigned)
@@ -103,42 +161,6 @@ qos_get_queue_profile_settings(const struct ovsrec_q_profile *ovsrec_q_profile)
     }
 
     return settings;
-}
-
-/* free the memory associated with the queue-profile settings parameter */
-static void
-qos_free_queue_profile_settings(struct queue_profile_settings *settings)
-{
-    int q_index;
-    int lp_index;
-    struct queue_profile_entry *qp_entry;
-
-    if (settings) {
-        /* free up all the settings allocations */
-        for (q_index = 0; q_index < settings->n_entries; q_index++) {
-
-            /* handle each queue entry */
-            qp_entry = settings->entries[q_index];
-            for (lp_index = 0;
-                  lp_index < qp_entry->n_local_priorities;
-                  lp_index++ ) {
-
-                /* free each local priority entry */
-                free(qp_entry->local_priorities[lp_index]);
-            }
-
-            /* free the variable-length local-priority pointer array */
-            free(qp_entry->local_priorities);
-
-            /* then free the queue entry itself */
-            free(qp_entry);
-        }
-
-        /* finally, free up the settings parameter itself */
-        free(settings->entries);
-        free(settings);
-    }
-    return;
 }
 
 /* translate DB-based algorithm string into internal enumeration value */
@@ -162,6 +184,31 @@ qos_get_schedule_algorithm(char *db_algorithm)
     return algorithm;
 }
 
+/* free the memory associated with the schedule-profile settings parameter */
+static void
+qos_free_schedule_profile_settings(struct schedule_profile_settings *settings)
+{
+    int q_index;
+    struct schedule_profile_entry *sp_entry;
+
+    if (settings) {
+        /* free up all the settings allocations */
+        if (settings->entries) {
+            for (q_index = 0; q_index < settings->n_entries; q_index++) {
+
+                /* free each schedule entry */
+                sp_entry = settings->entries[q_index];
+                free(sp_entry);
+            }
+            free(settings->entries);
+        }
+
+        /* finally, free up the settings parameter itself */
+        free(settings);
+    }
+    return;
+}
+
 /* Construct schedule-profile_settings parameter for API call.
  *
  * If schedule profile is 'strict', create a synthetic profile based on
@@ -179,6 +226,9 @@ qos_get_schedule_profile_settings(const struct ovsrec_qos *ovsrec_qos,
 
     /* start constructing the variable-length settings for the API call */
     settings = calloc(1, sizeof *settings);
+    if (settings == NULL) {
+        return NULL;
+    }
 
     VLOG_DBG("%s %s %d", __FUNCTION__,
              ovsrec_qos->name, settings->n_entries);
@@ -189,11 +239,19 @@ qos_get_schedule_profile_settings(const struct ovsrec_qos *ovsrec_qos,
          */
         settings->n_entries = ovsrec_q_profile->n_q_profile_entries;
         settings->entries = malloc(settings->n_entries * sizeof(void *));
+        if (settings->entries == NULL) {
+            free(settings);
+            return NULL;
+        }
 
         /* 'strict' profile - synthesize a schedule profile. */
         for (q_index = 0; q_index < settings->n_entries; q_index++) {
             /* set each profile entry to the same 'strict' entry. */
             sp_entry = calloc(1, sizeof(struct schedule_profile_entry));
+            if (sp_entry == NULL) {
+                qos_free_schedule_profile_settings(settings);
+                return NULL;
+            }
             sp_entry->queue =
                 (unsigned)ovsrec_q_profile->key_q_profile_entries[q_index];
             settings->entries[q_index] = sp_entry;
@@ -206,12 +264,20 @@ qos_get_schedule_profile_settings(const struct ovsrec_qos *ovsrec_qos,
     else {
         settings->n_entries = (int)ovsrec_qos->n_queues;
         settings->entries = malloc(settings->n_entries * sizeof(void *));
+        if (settings->entries == NULL) {
+            free(settings);
+            return NULL;
+        }
 
         /* collect all queues in the profiles whether or not they changed */
         for (q_index = 0; q_index < settings->n_entries; q_index++) {
 
             /* each queue gets a separate entry in settings parameter */
             sp_entry = calloc(1, sizeof(struct schedule_profile_entry));
+            if (sp_entry == NULL) {
+                qos_free_schedule_profile_settings(settings);
+                return NULL;
+            }
             sp_entry->queue = (unsigned)ovsrec_qos->key_queues[q_index];
             settings->entries[q_index] = sp_entry;
 
@@ -228,29 +294,6 @@ qos_get_schedule_profile_settings(const struct ovsrec_qos *ovsrec_qos,
     }
 
     return settings;
-}
-
-/* free the memory associated with the schedule-profile settings parameter */
-static void
-qos_free_schedule_profile_settings(struct schedule_profile_settings *settings)
-{
-    int q_index;
-    struct schedule_profile_entry *sp_entry;
-
-    if (settings) {
-        /* free up all the settings allocations */
-        for (q_index = 0; q_index < settings->n_entries; q_index++) {
-
-            /* free each schedule entry */
-            sp_entry = settings->entries[q_index];
-            free(sp_entry);
-        }
-
-        /* finally, free up the settings parameter itself */
-        free(settings->entries);
-        free(settings);
-    }
-    return;
 }
 
 /* Apply a single set up of queue- and schedule- profiles. */

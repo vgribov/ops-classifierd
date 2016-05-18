@@ -77,6 +77,10 @@ qos_configure_global_cos_map(struct ofproto *ofproto,
         /* build the settings struct, call provider API */
         cos_map_settings.entries = malloc(sizeof(struct cos_map_entry) *
                                           cos_map_settings.n_entries);
+        if (cos_map_settings.entries == NULL) {
+            /* Out of memory, get out. Called again at next notification. */
+            return;
+        }
         n_modified = 0;
         OVSREC_QOS_COS_MAP_ENTRY_FOR_EACH(ovsrec_cos_map_entry, idl) {
             if (OVSREC_IDL_IS_ROW_MODIFIED(ovsrec_cos_map_entry, idl_seqno) ||
@@ -124,6 +128,10 @@ qos_configure_global_dscp_map(struct ofproto *ofproto,
         /* build the settings struct, call provider API */
         dscp_map_settings.entries = malloc(sizeof(struct dscp_map_entry) *
                                            dscp_map_settings.n_entries);
+        if (dscp_map_settings.entries == NULL) {
+            /* Out of memory, get out. Called again at next notification. */
+            return;
+        }
         n_modified = 0;
         OVSREC_QOS_DSCP_MAP_ENTRY_FOR_EACH(ovsrec_dscp_map_entry, idl) {
             if (OVSREC_IDL_IS_ROW_MODIFIED(ovsrec_dscp_map_entry, idl_seqno) ||
