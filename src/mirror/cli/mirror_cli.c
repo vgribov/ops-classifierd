@@ -158,10 +158,12 @@ cli_show_mirror_running_config_callback(void *p_private)
          }
       }
 
-      if (both_array) {
-         free (both_array);
-         both_array = NULL;
-      }
+      free (both_array);
+      /* This is necessary since an alloc/free may occur for each loop
+       * iteration, but freeing does not clear the pointer which would
+       * infer a buffer when none is there.
+       */
+      both_array = NULL;
 
       /* active/no shutdown */
       if (mirror->active && (*mirror->active == true)) {
@@ -216,8 +218,6 @@ cli_show_mirror_exec (const char *mirror_arg)
 
                both_array = calloc(mirror->n_select_dst_port, sizeof *both_array);
                if (both_array == NULL) {
-                  VLOG_DBG("Failed to allocate memory for mirror array. Function=%s, Line=%d", __func__, __LINE__);
-                  vty_out(vty, "Error, out of memory%s", VTY_NEWLINE);
                   return CMD_WARNING;
                }
             }
@@ -422,8 +422,6 @@ update_bridge_mirrors (struct ovsrec_mirror *mirror_row, bool delete)
    /* build new bridge row mirrors map */
    mirrors = calloc(n_mirrors, sizeof(*default_bridge_row->mirrors));
    if (mirrors == NULL) {
-      VLOG_DBG("Failed to allocate memory for mirror array. Function=%s, Line=%d", __func__, __LINE__);
-      vty_out(vty, "Error, out of memory%s", VTY_NEWLINE);
       return false;
    }
 
@@ -620,8 +618,6 @@ update_dst_port (const struct ovsrec_mirror *mirror,
 
    ports = calloc(n_ports, sizeof(*mirror->select_dst_port));
    if (ports == NULL) {
-      VLOG_DBG("Failed to allocate memory for port array. Function=%s, Line=%d", __func__, __LINE__);
-      vty_out(vty, "Error, out of memory%s", VTY_NEWLINE);
       return CMD_WARNING;
    }
 
@@ -671,8 +667,6 @@ update_src_port (const struct ovsrec_mirror *mirror,
 
    ports = calloc(n_ports, sizeof(*mirror->select_src_port));
    if (ports == NULL) {
-      VLOG_DBG("Failed to allocate memory for port array. Function=%s, Line=%d", __func__, __LINE__);
-      vty_out(vty, "Error, out of memory%s", VTY_NEWLINE);
       return CMD_WARNING;
    }
 
@@ -1335,8 +1329,8 @@ DEFUN (cli_show_a_mirror,
        cli_show_a_mirror_cmd,
       "show mirror MIRROR",
       SHOW_STR
-      "Port mirror"
-      "Name of existing mirror session\n")
+      MIRROR_HELPSTR
+      MIRROR_SESSION_NAME_HELPSTR)
 {
 
    if (argc != 1) {
