@@ -1302,4 +1302,17 @@ access_list_ovsdb_init(void)
 
     /* Initialize ACL DB Util array */
     acl_db_util_init();
+
+    /* Initialize OVSDB compound indexing for ACL table */
+    struct ovsdb_idl_index *acl_table_index = ovsdb_idl_create_index(idl, &ovsrec_table_acl, "by_ACL_list_type_and_name");
+    ovsdb_idl_index_add_column(acl_table_index, &ovsrec_acl_col_list_type, OVSDB_INDEX_ASC, NULL);
+    ovsdb_idl_index_add_column(acl_table_index, &ovsrec_acl_col_name, OVSDB_INDEX_ASC, NULL);
+
+    /* Initialize OVSDB compound indexing for Port table */
+    struct ovsdb_idl_index *port_table_index = ovsdb_idl_create_index(idl, &ovsrec_table_port, "by_Port_name");
+    ovsdb_idl_index_add_column(port_table_index, &ovsrec_port_col_name, OVSDB_INDEX_ASC, NULL);
+
+    /* Initialize OVSDB compound indexing for VLAN table */
+    struct ovsdb_idl_index *vlan_table_index = ovsdb_idl_create_index(idl, &ovsrec_table_vlan, "by_VLAN_id");
+    ovsdb_idl_index_add_column(vlan_table_index, &ovsrec_vlan_col_id, OVSDB_INDEX_ASC, NULL);
 }
