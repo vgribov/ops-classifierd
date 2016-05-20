@@ -48,6 +48,8 @@
 #include <hash.h>
 #include <shash.h>
 #include <acl_daemon.h>
+#include "poll-loop.h"
+#include "timer.h"
 
 #include "classifierd.h"
 
@@ -61,8 +63,11 @@ static struct ovsdb_idl *idl;
 
 static unsigned int idl_seqno;
 
+static bool classifierd_run_timer;
+
 static bool system_configured = false;
 
+#define  CLASSIFIERD_RUN_TIMER_INTERVAL_MSEC 1000 /**< Run timer interval */
 
 void
 classifierd_debug_dump_port_acl_info(struct ds *ds,
@@ -242,6 +247,8 @@ classifierd_reconfigure(void)
     /* Update idl_seqno after handling all OVSDB updates. */
     idl_seqno = new_idl_seqno;
 
+    /* Setup a poll timer to wake up the daemon */
+    classifierd_run_timer = true;
 
     return rc;
 } /* classifierd_reconfigure */
@@ -303,6 +310,11 @@ classifierd_run(void)
 void
 classifierd_wait(void)
 {
+    if (classifierd_run_timer) {
+        poll_timer_wait_until(time_msec() +
+                              CLASSIFIERD_RUN_TIMER_INTERVAL_MSEC);
+        classifierd_run_timer = false;
+    }
     ovsdb_idl_wait(idl);
 } /* classifierd_wait */
 
