@@ -160,4 +160,13 @@ void print_port_aclv4_in_statistics(const struct ovsrec_port *port_row);
  */
 void print_vlan_aclv4_in_statistics(const struct ovsrec_vlan *vlan_row);
 
+/**
+ * Test whether an ACL's entries are equal
+ *
+ * @param  acl_row ACL to test
+ *
+ * @return         true if the ACL's entries are equal, false otherwise
+ */
+bool aces_cur_cfg_equal (const struct ovsrec_acl *acl_row);
+
 #endif /* _ACCESS_LIST_VTY_OVSDB_UTIL_H */

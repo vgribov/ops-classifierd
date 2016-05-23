@@ -380,3 +380,18 @@ print_vlan_aclv4_in_statistics(const struct ovsrec_vlan *vlan_row)
         }
     }
 }
+
+bool aces_cur_cfg_equal (const struct ovsrec_acl *acl_row)
+{
+    /* Compare number of entries */
+    if (acl_row->n_cur_aces != acl_row->n_cfg_aces) {
+        return false;
+    }
+    /* Compare entry pointers; entry rows aren't modified so this is enough */
+    if (memcmp(acl_row->value_cfg_aces,
+               acl_row->value_cur_aces,
+               acl_row->n_cfg_aces * sizeof(struct ovsrec_acl_entry *))) {
+        return false;
+    }
+    return true;
+}
