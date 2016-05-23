@@ -64,6 +64,8 @@
 #define ACL_VLAN_STR "Specify VLAN\n"
 #define ACL_VLAN_ID_STR "VLAN ID\n"
 #define ACL_ALL_STR "All access-lists\n"
+#define ACL_RESET_STR "Reset configuration\n"
+#define ACL_APPLIED_STR "Applied configuration record\n"
 
 /* Command strings (cmdstr) and Help strings (helpstr) used in vtysh DEFUNs */
 #define ACE_SEQ_CMDSTR "<1-" ACL_NUM_TO_STR(ACE_SEQ_MAX) "> "

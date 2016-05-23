@@ -37,8 +37,8 @@
  * @retval CMD_OVSDB_FAILURE     on database/transaction failure
  * @retval CMD_ERR_NOTHING_TODO  on bad parameter/value
  */
-int cli_create_acl_if_needed(const char *acl_type,
-                             const char *acl_name);
+int cli_create_acl_if_needed (const char *acl_type,
+                              const char *acl_name);
 
 /**
  * Delete an ACL
@@ -51,8 +51,8 @@ int cli_create_acl_if_needed(const char *acl_type,
  * @retval CMD_ERR_NOTHING_TODO  on bad parameter/value
  *
  */
-int cli_delete_acl(const char *acl_type,
-                   const char *acl_name);
+int cli_delete_acl (const char *acl_type,
+                    const char *acl_name);
 
 /**
  * Create/Update an ACE
@@ -151,6 +151,17 @@ int cli_print_acls (const char *interface_type,
                     const char *commands,
                     const char *configuration);
 
+/**
+ * Reset user-specified ACL entry configuration to active configuration
+ *
+ * @param  acl_type        ACL type string
+ * @param  acl_name        ACL name string
+ *
+ * @retval CMD_SUCCESS           on success
+ * @retval CMD_OVSDB_FAILURE     on database/transaction failure
+ * @retval CMD_ERR_NOTHING_TODO  on bad parameter/value
+ */
+int cli_reset_acls (const char *acl_type, const char *acl_name);
 
 /**
  * Apply an ACL to an interface in a specified direction
@@ -189,6 +200,24 @@ int cli_unapply_acl (const char *interface_type,
                      const char *acl_type,
                      const char *acl_name,
                      const char *direction);
+
+/**
+ * Reset user-specified ACL apply configuration to active configuration
+ *
+ * @param  interface_type  Interface (Port/VLAN) type string
+ * @param  interface_id    Interface (Port/VLAN) identifier string
+ * @param  acl_type        ACL type string
+ * @param  direction       Direction of traffic ACL is applied to
+ *
+ * @retval CMD_SUCCESS           on success
+ * @retval CMD_OVSDB_FAILURE     on database/transaction failure
+ * @retval CMD_ERR_NOTHING_TODO  on bad parameter/value
+
+ */
+int cli_reset_applied_acls (const char *interface_type,
+                            const char *interface_id,
+                            const char *acl_type,
+                            const char *direction);
 
 /**
  * Print statistics for a specified ACL (optionally for a specified interface
