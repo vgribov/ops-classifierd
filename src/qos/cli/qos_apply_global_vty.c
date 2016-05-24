@@ -225,7 +225,7 @@ qos_apply_global_command(const char *queue_profile_name,
 DEFUN(qos_apply_global,
         qos_apply_global_cmd,
         "apply qos queue-profile NAME schedule-profile NAME",
-        "Apply a configuration\n"
+        APPLY_STR
         QOS_HELP_STRING
         "The queue-profile to apply\n"
         "The queue-profile to apply\n"
@@ -257,7 +257,7 @@ DEFUN(qos_apply_global,
 DEFUN(qos_apply_global_strict,
         qos_apply_global_strict_cmd,
         "apply qos queue-profile NAME schedule-profile strict",
-        "Apply a configuration\n"
+        APPLY_STR
         QOS_HELP_STRING
         "The queue-profile to apply\n"
         "The queue-profile to apply\n"

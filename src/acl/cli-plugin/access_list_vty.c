@@ -1224,7 +1224,7 @@ DEFUN (cli_show_access_list_applied, cli_show_access_list_applied_cmd,
  */
 DEFUN (cli_apply_access_list, cli_apply_access_list_cmd,
        "apply access-list (ip) NAME (in)",
-       ACL_APPLY_STR
+       APPLY_STR
        ACL_STR
        ACL_IP_STR
        ACL_NAME_STR
@@ -1263,7 +1263,7 @@ DEFUN (cli_apply_access_list, cli_apply_access_list_cmd,
 DEFUN (cli_no_apply_access_list, cli_no_apply_access_list_cmd,
        "no apply access-list (ip) NAME (in)",
        NO_STR
-       ACL_APPLY_STR
+       APPLY_STR
        ACL_STR
        ACL_IP_STR
        ACL_NAME_STR
