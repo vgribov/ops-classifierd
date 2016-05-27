@@ -60,10 +60,8 @@ TOPOLOGY = """
 [type=host name="Host 1"] hs1
 [type=host name="Host 2"] hs2
 [type=host name="Host 3"] hs3
-[type=host name="Sniffer 1" \
-image="openswitch/ubuntuscapy:latest"] sn1
-[type=openswitch name="OpenSwitch 1" \
-image="mirror3:latest"] ops1
+[type=host name="Sniffer 1" image="openswitch/ubuntuscapy:latest"] sn1
+[type=openswitch name="OpenSwitch 1" image="mirror3:latest"] ops1
 # [type=host name="Sniffer 1"] sn1
 # [type=openswitch name="OpenSwitch 1" target="AS5712"] ops1
 
