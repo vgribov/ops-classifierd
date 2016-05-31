@@ -192,8 +192,6 @@ acl_port_map_update_cfg_internal(struct acl_port_map *acl_port_map,
                                      acl_port_map->parent, port);
     int rc;
     const char *method_called = NULL;
-    /* details is used to log message in VLOG */
-    char details[256];
     /* status_str used to store status description in db */
     char status_str[OPS_CLS_STATUS_MSG_MAX_LEN] = {0};
     unsigned int sequence_number = 0;
@@ -296,11 +294,10 @@ acl_port_map_update_cfg_internal(struct acl_port_map *acl_port_map,
     }
 
     if (method_called == NULL) {
-        sprintf(details, "ACL_PORT_MAP %s:%s:%s no PD call needed",
+        VLOG_DBG("ACL_PORT_MAP %s:%s:%s no PD call needed",
                  acl_port_map->parent->port->name,
                  ops_cls_type_strings[acl_port_map->acl_db->type],
                  ops_cls_direction_strings[acl_port_map->acl_db->direction]);
-        VLOG_DBG(details);
         /* status_str will be empty string ("") on success */
         acl_port_map_set_cfg_status(acl_port_map, port->cfg,
                             OPS_CLS_STATE_APPLIED_STR, 0, status_str);
@@ -313,27 +310,25 @@ acl_port_map_update_cfg_internal(struct acl_port_map *acl_port_map,
                                                    clear_req_id);
         /* Print debug messages to note success or failure */
         if (rc == 0) {
-             sprintf(details, "ACL_PORT_MAP %s:%s:%s -- PD %s succeeded",
+             VLOG_DBG("ACL_PORT_MAP %s:%s:%s -- PD %s succeeded",
                   acl_port_map->parent->port->name,
                   ops_cls_type_strings[acl_port_map->acl_db->type],
                   ops_cls_direction_strings[acl_port_map->acl_db->direction],
                   method_called);
         } else {
-             sprintf(details, "ACL_PORT_MAP %s:%s:%s -- PD %s failed",
+             VLOG_DBG("ACL_PORT_MAP %s:%s:%s -- PD %s failed",
                   acl_port_map->parent->port->name,
                   ops_cls_type_strings[acl_port_map->acl_db->type],
                   ops_cls_direction_strings[acl_port_map->acl_db->direction],
                   method_called);
         }
-        VLOG_DBG(details);
     } else if (rc == 0) {
         /* success */
-        sprintf(details, "ACL_PORT_MAP %s:%s:%s -- PD %s succeeded",
+        VLOG_DBG("ACL_PORT_MAP %s:%s:%s -- PD %s succeeded",
                  acl_port_map->parent->port->name,
                  ops_cls_type_strings[acl_port_map->acl_db->type],
                  ops_cls_direction_strings[acl_port_map->acl_db->direction],
                  method_called);
-        VLOG_DBG(details);
         acl_port_map_set_hw_acl(acl_port_map, acl);
         acl_db_util_set_applied(acl_port_map->acl_db, port->cfg,
                                  acl->ovsdb_row);
@@ -356,12 +351,11 @@ acl_port_map_update_cfg_internal(struct acl_port_map *acl_port_map,
                                 sequence_number,
                                 OPS_CLS_STATUS_MSG_MAX_LEN,
                                 status_str);
-        sprintf(details, "ACL_PORT_MAP %s:%s:%s -- PD %s failed",
+        VLOG_DBG("ACL_PORT_MAP %s:%s:%s -- PD %s failed",
                  acl_port_map->parent->port->name,
                  ops_cls_type_strings[acl_port_map->acl_db->type],
                  ops_cls_direction_strings[acl_port_map->acl_db->direction],
                  method_called);
-        VLOG_DBG(details);
         acl_port_map_set_cfg_status(acl_port_map, port->cfg,
                                     OPS_CLS_STATE_REJECTED_STR,
                                     status.status_code, status_str);

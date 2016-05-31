@@ -147,7 +147,7 @@ acl_ipv4_address_user_to_normalized(const char *user_str, char *normalized_str)
     slash_ptr = strchr(user_str, '/');
     /* If no mask is given, set host mask (/32) */
     if (!slash_ptr) {
-        strcpy(normalized_str, user_str);
+        strncpy(normalized_str, user_str, INET_ADDRSTRLEN*2);
         strcat(normalized_str, "/255.255.255.255");
         return true;
     }
@@ -176,7 +176,7 @@ acl_ipv4_address_user_to_normalized(const char *user_str, char *normalized_str)
     }
 
     /* For dotted-decimal mask, just copy the whole string as-is */
-    strcpy(normalized_str, user_str);
+    strncpy(normalized_str, user_str, INET_ADDRSTRLEN*2);
     return true;
 }
 
@@ -188,7 +188,7 @@ acl_ipv4_address_normalized_to_user(const char *normalized_str, char *user_str)
 
     /* Special case of "any" or empty string can return early */
     if (!normalized_str || !strcmp(normalized_str, "")) {
-        strcpy(user_str, "any");
+        strncpy(user_str, "any", MIN(strlen("any")+1, INET_ADDRSTRLEN*2));
         return true;
     }
 
@@ -211,7 +211,7 @@ acl_ipv4_address_normalized_to_user(const char *normalized_str, char *user_str)
     /** @todo check for ability to show in prefix-length notation (e.g. /24) */
 
     /* Otherwise just copy the whole string as-is */
-    strcpy(user_str, normalized_str);
+    strncpy(user_str, normalized_str, INET_ADDRSTRLEN*2);
     return true;
 }
 

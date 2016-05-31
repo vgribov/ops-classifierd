@@ -250,6 +250,10 @@ acl_lookup_by_uuid(const struct uuid* uuid)
 {
     struct acl *acl;
 
+    if (!uuid) {
+        return NULL;
+    }
+
     HMAP_FOR_EACH_WITH_HASH(acl, all_node_uuid, uuid_hash(uuid),
                             &all_acls_by_uuid) {
         if (uuid_equals(&acl->uuid, uuid)) {
@@ -376,7 +380,8 @@ acl_cfg_update(struct acl* acl)
         int rc = call_ofproto_ops_cls_list_update(acl, &status);
 
         if (rc == 0) {
-            sprintf(details, "ACL %s -- PD list_update succeeded", acl->name);
+            snprintf(details, sizeof(details),
+                    "ACL %s -- PD list_update succeeded", acl->name);
             VLOG_DBG(details);
             ovsrec_acl_set_cur_aces(acl->ovsdb_row,
                                     acl->ovsdb_row->key_in_progress_aces,
@@ -386,7 +391,8 @@ acl_cfg_update(struct acl* acl)
             acl_set_cfg_status(acl->ovsdb_row, OPS_CLS_STATE_APPLIED_STR,
                                0, status_str);
         } else {
-            sprintf(details, "ACL %s -- PD list_update failed for"
+            snprintf(details, sizeof(details),
+                    "ACL %s -- PD list_update failed for"
                     " acl entry = %u and port = %s", acl->name,
                      status.entry_id, netdev_get_name(status.port->netdev));
             VLOG_DBG(details);
@@ -406,7 +412,8 @@ acl_cfg_update(struct acl* acl)
                                status.status_code, status_str);
         }
     } else {
-        sprintf(details, "ACL %s -- Not applied. No PD call necessary",
+        snprintf(details, sizeof(details),
+                "ACL %s -- Not applied. No PD call necessary",
                 acl->name);
         VLOG_DBG(details);
         ovsrec_acl_set_cur_aces(acl->ovsdb_row,

@@ -1106,7 +1106,7 @@ is_a_src_iface_an_active_dest(const struct ovsrec_mirror* this_mirror)
             if (strncmp (dst_port->name, mirror->output_port->name,
                                             INTERFACE_NAMSIZ) == 0) {
                vty_out (vty, "Interface (%s) already in use as destination in active session %s%s",
-                                                                src_port->name,
+                                                                dst_port->name,
                                                       mirror->name,VTY_NEWLINE);
                return true;
             }

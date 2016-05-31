@@ -238,7 +238,7 @@ pab_transport_offset(struct parse_buff *pab)
 static inline unsigned int
 ip_hdrlen(struct parse_buff *pab)
 {
-    return ip_hdr(pab)->ihl * 4;
+    return ip_hdr(pab)->ihl * 4u;
 }
 
 static inline unsigned int

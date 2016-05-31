@@ -24,7 +24,7 @@
 
 #define ACL_PROTOCOL_INVALID -1 /**< negative value to indicate error  */
 #define ACL_PROTOCOL_MIN      0 /**< lowest possible packet data value */
-#define ACL_PROTOCOL_MAX    256 /**< highest possible packet data valu */
+#define ACL_PROTOCOL_MAX    255 /**< highest possible packet data valu */
 #define ACL_PROTOCOL_ANY (ACL_PROTOCOL_MAX + 1) /**< positive but beyond max */
 
 /* Log timer constants */
