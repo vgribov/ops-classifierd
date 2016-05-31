@@ -28,16 +28,24 @@
 #include "acl_db_util.h"
 #include "ops-cls-asic-plugin.h"
 #include "ops_cls_status_msgs.h"
+#include "openswitch-idl.h"
 
 VLOG_DEFINE_THIS_MODULE(acl_daemon_ports);
 
-/* This function determines if hw_ready_state can be set for the interface
- * associated with the port_row.
- */
+/**************************************************************************//**
+ * This function determines if hw_ready_state can be set for the interface
+ * associated with the port_row
+ *
+ * @param[in]   port_row  - Pointer to @see struct ovsrec_port
+ *
+ * @return      true      - If the hw_ready_state can be set
+ *                          true
+ *              false     - If the hw_ready_state is false
+*****************************************************************************/
 static bool
 acl_ports_is_hw_ready(const struct ovsrec_port *port_row)
 {
-    const char *status  = NULL;
+    const char *status_str = NULL;
     int acl_type_iter;
 
     ovs_assert(port_row);
@@ -57,14 +65,21 @@ acl_ports_is_hw_ready(const struct ovsrec_port *port_row)
             /* ACL is configured on this port so verify if
              * ACL is applied successfully in hw or not
              */
-            status =
-                smap_get(acl_db_util_get_cfg_status(&acl_db_accessor[acl_type_iter],
-                                                    port_row),
-                         OPS_CLS_STATUS_CODE_STR);
+            const struct smap acl_status =
+                acl_db_util_get_cfg_status(&acl_db_accessor[acl_type_iter],
+                                           port_row);
+
+            status_str = smap_get(&acl_status, OPS_CLS_STATUS_CODE_STR);
+
             VLOG_DBG("port %s: ACL %s configured, apply status %s \n",
                       port_row->name, acl_row->name,
-                      status);
-            if(strtoul(status,NULL,10) != OPS_CLS_STATUS_SUCCESS) {
+                      status_str);
+
+            if (status_str == NULL) {
+                return false;
+            }
+
+            if(strtoul(status_str, NULL, 10) != OPS_CLS_STATUS_SUCCESS) {
                 /* block hw_ready on this interface */
                 return false;
             }
@@ -74,149 +89,139 @@ acl_ports_is_hw_ready(const struct ovsrec_port *port_row)
     return true;
 }
 
-/**
- * Processes single port to determine if hw_ready_state
- * for the interface associated with this port to be set to true or false
- */
+/**************************************************************************//**
+ * This function processes port row to determine if hw_ready_state for each
+ * interface needs to be set to true or false
+ *
+ * @param[in]   port_row       - Pointer to @see struct
+ *                               ovsrec_port
+ *
+ * @return      A non-zero value if a transaction commit to
+ *              OVSDB is required
+*****************************************************************************/
 static int
-acl_single_port_reconfigure(const struct ovsrec_port *port_row)
-{
-    int  rc = 0;
-    bool hw_ready_state = false;
-    const char *hw_status = NULL;
-
-    ovs_assert(port_row);
-    ovs_assert(port_row->n_interfaces == 1);
-
-    if(port_row->interfaces[0] == NULL) {
-        VLOG_WARN("Port %s: linked to NULL interface.\n",port_row->name);
-        return rc;
-    }
-
-    VLOG_DBG("Port %s:  linked to interface %s\n",
-              port_row->name,port_row->interfaces[0]->name);
-
-    hw_status =
-            smap_get((const struct smap *)&port_row->interfaces[0]->hw_status,
-                     OPS_INTF_HW_READY_KEY_STR);
-
-    if((hw_status == NULL) ||
-       (strncmp(hw_status,
-                OPS_INTF_HW_READY_VALUE_STR_FALSE,
-                strlen(OPS_INTF_HW_READY_VALUE_STR_FALSE)) == 0)) {
-        hw_ready_state = acl_ports_is_hw_ready(port_row);
-
-        if(hw_ready_state) {
-            /* set interface hw_ready_state in db */
-            ovsrec_interface_update_hw_status_setkey(
-                                             port_row->interfaces[0],
-                                             OPS_INTF_HW_READY_KEY_STR,
-                                             OPS_INTF_HW_READY_VALUE_STR_TRUE);
-
-            /* The hw_status is set to true above. So if hw_ready was blocked
-               due to acls, delete it now */
-            hw_status =
-             smap_get((const struct smap *)&port_row->interfaces[0]->hw_status,
-                      OPS_INTF_HW_READY_BLOCKED_REASON_STR);
-            if((hw_status != NULL) &&
-               (strncmp(
-                 hw_status,
-                 OPS_INTF_HW_READY_BLOCKED_REASON_VALUE_STR_ACLS,
-                 strlen(
-                     OPS_INTF_HW_READY_BLOCKED_REASON_VALUE_STR_ACLS)) == 0)) {
-                ovsrec_interface_update_hw_status_delkey(
-                                         port_row->interfaces[0],
-                                         OPS_INTF_HW_READY_BLOCKED_REASON_STR);
-            }
-        } else {
-            if(hw_status == NULL) {
-                /* This indicates that the default value is not set for
-                   hw_status. At some point, this is expected to be set
-                   in the db by ops. For now, we set the default hw_status */
-
-                /* set interface hw_ready_state in db */
-                ovsrec_interface_update_hw_status_setkey(
-                                            port_row->interfaces[0],
-                                            OPS_INTF_HW_READY_KEY_STR,
-                                            OPS_INTF_HW_READY_VALUE_STR_FALSE);
-            }
-
-            /* set interface hw_ready_blocked_reason in db */
-            ovsrec_interface_update_hw_status_setkey(
-                             port_row->interfaces[0],
-                             OPS_INTF_HW_READY_BLOCKED_REASON_STR,
-                             OPS_INTF_HW_READY_BLOCKED_REASON_VALUE_STR_ACLS);
-        }
-
-        /* increment rc to indicate db update */
-        rc++;
-    }
-
-    return rc;
-}
-
-/**
- * Processes LAG port row to determine if hw_ready_state
- * for each interface of the LAG needs to be set to true or false
- */
-static int
-acl_lag_port_reconfigure(const struct ovsrec_port *port_row)
+acl_port_update_hw_ready_state(const struct ovsrec_port *port_row)
 {
     int rc = 0;
-    int acl_type_iter;
     unsigned int intf_idx;
     const char *hw_status = NULL;
+    bool hw_ready_state = false;
+    const char *port_admin_state = NULL;
 
     ovs_assert(port_row);
-    ovs_assert(port_row->n_interfaces > 1);
 
-    VLOG_DBG("%s: lag port name: %s\n",__FUNCTION__,port_row->name);
+    VLOG_DBG("%s: port name: %s\n",__FUNCTION__,port_row->name);
 
-    for (acl_type_iter = ACL_CFG_MIN_PORT_TYPES;
-            acl_type_iter <= ACL_CFG_MAX_PORT_TYPES; acl_type_iter++) {
-        const struct ovsrec_acl *acl_row =
-            acl_db_util_get_applied(&acl_db_accessor[acl_type_iter], port_row);
-        if(port_row->aclv4_in_applied || port_row->aclv4_out_applied) {
-            VLOG_ERR("ACLs are not supported on LAG port,"
-                     "port name:  %s, ACL name: %s\n",
-                      port_row->name,
-                      acl_row->name);
-            return rc;
-        }
-    }
+    hw_ready_state = acl_ports_is_hw_ready(port_row);
 
     for(intf_idx = 0; intf_idx < port_row->n_interfaces; intf_idx++) {
+        if (port_row->interfaces[intf_idx] == NULL) {
+            continue;
+        }
+
         hw_status =
-            smap_get(
+             smap_get(
                (const struct smap *)&port_row->interfaces[intf_idx]->hw_status,
                OPS_INTF_HW_READY_KEY_STR);
 
-        if((hw_status == NULL) ||
-           (strncmp(hw_status,
-                    OPS_INTF_HW_READY_VALUE_STR_FALSE,
-                    strlen(OPS_INTF_HW_READY_VALUE_STR_FALSE)) == 0)) {
-            VLOG_DBG("port %s: setting hw_ready_state to true on "
-                     "interface %s\n",port_row->name,
-                      port_row->interfaces[intf_idx]->name);
+        if (hw_ready_state) {
 
-            ovsrec_interface_update_hw_status_setkey(
+            if((hw_status == NULL) ||
+               (strncmp(hw_status,
+                        OPS_INTF_HW_READY_VALUE_STR_FALSE,
+                        strlen(OPS_INTF_HW_READY_VALUE_STR_FALSE)) == 0)) {
+
+                /* If hw_ready was blocked due to acls, set the hw_status
+                 * to true and delete hw_blocked_reason key
+                 */
+                hw_status =
+                 smap_get(
+                  (const struct smap *)&port_row->interfaces[intf_idx]->hw_status,
+                  OPS_INTF_HW_READY_BLOCKED_REASON_STR);
+                if((hw_status == NULL) ||
+                   (strncmp(hw_status, OPS_INTF_HW_READY_BLOCKED_REASON_VALUE_STR_ACLS,
+                            strlen(OPS_INTF_HW_READY_BLOCKED_REASON_VALUE_STR_ACLS)) == 0)) {
+
+                    VLOG_DBG("port %s: setting hw_ready_state to true on "
+                             "interface %s\n", port_row->name,
+                             port_row->interfaces[intf_idx]->name);
+
+                    /* set interface hw_ready_state to true in db */
+                    ovsrec_interface_update_hw_status_setkey(
+                                             port_row->interfaces[intf_idx],
+                                             OPS_INTF_HW_READY_KEY_STR,
+                                             OPS_INTF_HW_READY_VALUE_STR_TRUE);
+
+                    ovsrec_interface_update_hw_status_delkey(
                                          port_row->interfaces[intf_idx],
-                                         OPS_INTF_HW_READY_KEY_STR,
-                                         OPS_INTF_HW_READY_VALUE_STR_TRUE);
+                                         OPS_INTF_HW_READY_BLOCKED_REASON_STR);
 
-            /* increment rc to indicate db update */
-            rc++;
+                    /* set the user_config to up */
+                    ovsrec_interface_update_user_config_setkey(
+                                    port_row->interfaces[intf_idx],
+                                    INTERFACE_USER_CONFIG_MAP_ADMIN,
+                                    OVSREC_INTERFACE_USER_CONFIG_ADMIN_UP);
 
+                    /* update the admin_state in port table to up */
+                    port_admin_state = OVSREC_INTERFACE_ADMIN_STATE_UP;
+
+                    /* increment rc to indicate db update */
+                    rc++;
+                }
+            }
+        }
+        else
+        {
+            if((hw_status == NULL) ||
+               (strncmp(hw_status,
+                        OPS_INTF_HW_READY_VALUE_STR_TRUE,
+                        strlen(OPS_INTF_HW_READY_VALUE_STR_TRUE)) == 0)) {
+
+                /* set interface hw_ready_state to false in db */
+                ovsrec_interface_update_hw_status_setkey(
+                                            port_row->interfaces[intf_idx],
+                                            OPS_INTF_HW_READY_KEY_STR,
+                                            OPS_INTF_HW_READY_VALUE_STR_FALSE);
+
+                /* set interface hw_ready_blocked_reason in db */
+                ovsrec_interface_update_hw_status_setkey(
+                              port_row->interfaces[intf_idx],
+                              OPS_INTF_HW_READY_BLOCKED_REASON_STR,
+                              OPS_INTF_HW_READY_BLOCKED_REASON_VALUE_STR_ACLS);
+
+                /* set the user_config to down */
+                ovsrec_interface_update_user_config_setkey(
+                                port_row->interfaces[intf_idx],
+                                INTERFACE_USER_CONFIG_MAP_ADMIN,
+                                OVSREC_INTERFACE_USER_CONFIG_ADMIN_DOWN);
+
+                /* update the admin_state in port table to down */
+                port_admin_state = OVSREC_INTERFACE_ADMIN_STATE_DOWN;
+
+                /* increment rc to indicate db update */
+                rc++;
+            }
         }
     } /* end for loop */
+
+    /* set the admin_state in port table */
+    if (port_admin_state != NULL) {
+        ovsrec_port_set_admin(port_row, port_admin_state);
+    }
 
     return rc;
 }
 
-/**
- * Process port table changes to determine if interface hw_ready_state
- * needs to be set to true or false for each port row entry
- */
+/**************************************************************************//**
+ * This function processes port table changes to determine if interface
+ * hw_ready_state needs to be set to true or false for each port row entry
+ *
+ * @param[in]   idl       - Pointer to @see struct ovsdb_idl
+ * @param[in]   idl_seqno - IDL batch sequence number
+ *
+ * @return      A non-zero value if a transaction commit to
+ *              OVSDB is required
+*****************************************************************************/
 int
 acl_ports_reconfigure(struct ovsdb_idl *idl, unsigned int idl_seqno)
 {
@@ -232,12 +237,7 @@ acl_ports_reconfigure(struct ovsdb_idl *idl, unsigned int idl_seqno)
             continue;
         }
 
-        if(port_row->n_interfaces == 1) {
-            rc = acl_single_port_reconfigure(port_row);
-        } else {   /* LAG */
-            rc = acl_lag_port_reconfigure(port_row);
-        } /* end if n_interfaces */
-
+        rc += acl_port_update_hw_ready_state(port_row);
     } /* for each port ROW */
 
     VLOG_DBG("%s: number of updates back to db: %d",__FUNCTION__,rc);

@@ -25,6 +25,19 @@
 #include "acl_db_util.h"
 
 /*************************************************************
+ * acl_port_interface structure
+ *
+ * This is stored in a list inside acl_port.
+ *************************************************************/
+ struct acl_port_interface {
+     struct ovs_list iface_node;
+     const struct ovsrec_interface *ovsdb_iface_row; /*< Iface table row */
+     bool tx_enable; /*< TRUE if interface is tx_enabled in hw_bond_config */
+     bool rx_enable; /*< TRUE if interface is rx_enabled in hw_bond_config */
+     ofp_port_t      ofp_port; /*< OpenFlow Port number */
+ };
+
+/*************************************************************
  * acl_port_map structures
  *
  * This is stored in an arrary inside acl_port.
@@ -56,9 +69,10 @@ struct acl_port {
     /* Hold all of my acl_port_map records internally, no need to
        allocate them separately. */
     struct acl_port_map port_map[ACL_CFG_NUM_PORT_TYPES];
-
     const struct ovsrec_port *ovsdb_row;
     unsigned int       delete_seqno; /* mark/sweep to identify deleted */
+    bool lag_members_active; /* True if atleast one lag member is up */
+    struct ovs_list port_ifaces;    /* List of "struct acl_port_interface's. */
 };
 
 /**************************************************************************//**
@@ -130,5 +144,41 @@ void acl_port_debug_init(void);
  * @param[in] acl - Pointer to the @see struct acl
  *****************************************************************************/
 void acl_port_unapply_if_needed(struct acl *acl);
+
+/**************************************************************************//**
+ * This function handles LAG port reconfiguration in case a LAG
+ * member with ACL is shutdown. This function is called, when
+ * @see bridge_reconfigure() is called from switchd.
+ *
+ * @param[in] blk_params - Pointer to the block parameters structure
+ *****************************************************************************/
+void acl_port_lag_ifaces_shutdown(struct blk_params *blk_params);
+
+/**************************************************************************//**
+ * This function updates/replaces an ACL to a given port with a given
+ * configuration.
+ * This is the update/replace call of PI CRUD API.
+ *
+ * @param[in] acl_port_map - Pointer to the @see struct acl_port_map
+ * @param[in] port         - Pointer to @see struct port
+ * @param[in] ofproto      - Pointer to @see struct ofproto
+ *
+ * @return    An integer value indicating success or failure
+ *****************************************************************************/
+void
+acl_port_map_cfg_update(struct acl_port_map* acl_port_map, struct port *port,
+                        struct ofproto *ofproto);
+
+/*************************************************************************//**
+ * Sets the hw_acl field in the acl_port_map. This function is called after
+ * an ACL has been successfully applied in hw to a port config
+ * type (type, direction)
+ *
+ * @param[in] acl_port_map - Pointer to the port_map containing port info
+ *                           for a given cfg (type, direction)
+ * @param[in] acl          - Pointer to acl that was successfully applied
+ *****************************************************************************/
+void
+acl_port_map_set_hw_acl(struct acl_port_map *acl_port_map, struct acl *acl);
 
 #endif  /* __SWITCHD__PLUGIN__ACL_PORT_H__ */

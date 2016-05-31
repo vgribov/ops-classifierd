@@ -279,6 +279,17 @@ struct ops_cls_list_entry_match_fields
 #define  OPS_CLS_ACTION_COUNT   0x00000008 /**< Count action flag  */
 
 /**
+ * Classifier LAG Update Actions Enumeration
+ */
+enum ops_cls_lag_update_action
+{
+    OPS_CLS_LAG_MEMBER_INTF_INVALID = 0,
+    OPS_CLS_LAG_MEMBER_INTF_ADD, /**< Add a LAG member */
+    OPS_CLS_LAG_MEMBER_INTF_DEL, /**< Delete a LAG member */
+    OPS_CLS_MAX_ACTION
+};
+
+/**
  * Classifier List Entry Action Structure
  */
 struct ops_cls_list_entry_actions
@@ -480,6 +491,55 @@ struct ops_cls_plugin_interface {
                             enum ops_cls_type               list_type,
                             struct ofproto                  *ofproto,
                             void                            *aux,
+                            struct ops_cls_interface_info   *interface_info,
+                            enum ops_cls_direction          direction,
+                            struct ops_cls_pd_status        *pd_status);
+
+
+    /**
+     * API from switchd platform independent layer to platform dependent layer
+     * to specify the LAG port that needs to be updated when a
+     * member interface goes through a state transition or is moving
+     * in or out of the LAG. If a LAG has ACLs applied in two
+     * directions (in and out), then this API is called for every
+     * applied ACL in each direction. If any of the calls fail, then
+     * a rollback of successfully applied list is performed and the
+     * incoming member interface is brought down. For general cases
+     * such as apply ACL to a LAG and remove ACL from a LAG are
+     * handled by apply and remove APIs respectively.
+     *
+     * All pointer arguments reference objects whose lifetimes are not
+     * guaranteed to outlast this call. If you want to remember them for
+     * later, you must make a copy.
+     *
+     * Success or failure is all or nothing.  Status must be
+     * returned for the switch interface passed in pd_status parameter.
+     *
+     * @param[in]   list            - classifier list to apply
+     * @param[in]   ofproto         - ofproto of bridge containing
+     *                                desired switch interface
+     * @param[in]   aux             - opaque key to desired switch interface
+     *                                used with ofproto to get
+     *                                ofproto_bundle
+     * @param[in]   ofp_port        - The LAG member interface
+     *                                number to be update
+     * @param[in]   action          - Action to be taken. This could
+     *                                be add or del
+     * @param[in]   interface_info  - interface information necessary for
+     *                                programming hw (e.g. L3 only, port, vlan)
+     * @param[in]   direction       - direction in which the list
+     *                                should be removed
+     * @param[out]  pd_status       - pointer to struct pre-allocated by
+     *                                calling function
+     * @retval      0               - if list successfully added to hw
+     * @retval      !=0             - otherwise and updates
+     *                                pd_status
+     */
+    int (*ofproto_ops_cls_lag_update)(struct ops_cls_list   *list,
+                            struct ofproto                  *ofproto,
+                            void                            *aux,
+                            ofp_port_t                      ofp_port,
+                            enum ops_cls_lag_update_action  action,
                             struct ops_cls_interface_info   *interface_info,
                             enum ops_cls_direction          direction,
                             struct ops_cls_pd_status        *pd_status);

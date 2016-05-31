@@ -40,6 +40,9 @@ int init (int phase_id)
     VLOG_INFO("[%s] - Registering BLK_INIT_RECONFIGURE", ACL_PLUGIN_NAME);
     register_reconfigure_callback(&acl_reconfigure_init, BLK_INIT_RECONFIGURE,
                                   NO_PRIORITY);
+    VLOG_INFO("[%s] - Registering BLK_INIT_RECONFIGURE to handle LAG shut", ACL_PLUGIN_NAME);
+    register_reconfigure_callback(&acl_port_lag_ifaces_shutdown, BLK_INIT_RECONFIGURE,
+                                  NO_PRIORITY);
     VLOG_INFO("[%s] - Registering BLK_BR_DELETE_PORTS", ACL_PLUGIN_NAME);
     register_reconfigure_callback(&acl_callback_port_delete,
                                   BLK_BR_DELETE_PORTS, NO_PRIORITY);

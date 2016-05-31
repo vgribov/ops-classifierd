@@ -24,7 +24,7 @@
 
 #define ACL_PROTOCOL_INVALID -1 /**< negative value to indicate error  */
 #define ACL_PROTOCOL_MIN      0 /**< lowest possible packet data value */
-#define ACL_PROTOCOL_MAX    255 /**< highest possible packet data valu */
+#define ACL_PROTOCOL_MAX    255 /**< highest possible packet data value */
 #define ACL_PROTOCOL_ANY (ACL_PROTOCOL_MAX + 1) /**< positive but beyond max */
 
 /* Log timer constants */
@@ -32,6 +32,12 @@
 #define ACL_LOG_TIMER_MIN "30"
 #define ACL_LOG_TIMER_MAX "300"
 #define ACL_LOG_TIMER_DEFAULT ACL_LOG_TIMER_MAX
+
+#define ACL_LAG_PORT_NAME_PREFIX          "lag"
+#define ACL_LAG_PORT_NAME_PREFIX_LENGTH   (3)
+#define ACL_PORT_IS_LAG(port)    ((strncmp(port->name,                   \
+                                   ACL_LAG_PORT_NAME_PREFIX,             \
+                                   ACL_LAG_PORT_NAME_PREFIX_LENGTH) == 0) ? true : false)
 
 /* Forward declaration - structure defined in acl_db_util.h */
 struct acl_db_util;

@@ -1267,7 +1267,8 @@ DEFUN (cli_apply_access_list, cli_apply_access_list_cmd,
 
     if (vty->node == VLAN_NODE) {
         interface_type_str = vlan_str;
-    } else if (vty->node == INTERFACE_NODE) {
+    } else if (vty->node == INTERFACE_NODE ||
+               vty->node == LINK_AGGREGATION_NODE) {
         interface_type_str = interface_str;
     } else {
         interface_type_str = NULL;
@@ -1307,7 +1308,8 @@ DEFUN (cli_no_apply_access_list, cli_no_apply_access_list_cmd,
 
     if (vty->node == VLAN_NODE) {
         interface_type_str = vlan_str;
-    } else if (vty->node == INTERFACE_NODE) {
+    } else if (vty->node == INTERFACE_NODE ||
+               vty->node == LINK_AGGREGATION_NODE) {
         interface_type_str = interface_str;
     } else {
         interface_type_str = NULL;
@@ -1557,6 +1559,8 @@ access_list_vty_init(void)
 
     install_element(INTERFACE_NODE, &cli_apply_access_list_cmd);
     install_element(INTERFACE_NODE, &cli_no_apply_access_list_cmd);
+    install_element(LINK_AGGREGATION_NODE, &cli_apply_access_list_cmd);
+    install_element(LINK_AGGREGATION_NODE, &cli_no_apply_access_list_cmd);
     install_element(VLAN_NODE, &cli_apply_access_list_cmd);
     install_element(VLAN_NODE, &cli_no_apply_access_list_cmd);
 
@@ -1635,6 +1639,19 @@ cli_post_init (void)
     if (e_vtysh_ok != retval) {
         vtysh_ovsdb_config_logmsg(VTYSH_OVSDB_CONFIG_ERR,
                     "unable to add vlan access-list show running callback");
+        assert(0);
+        return;
+    }
+
+    /* Register vlan context show running-configuration command */
+    retval = install_show_run_config_subcontext(
+                    e_vtysh_interface_lag_context,
+                    e_vtysh_interface_context_access_list,
+                    &show_run_access_list_lag_subcontext_callback,
+                    NULL, NULL);
+    if (e_vtysh_ok != retval) {
+        vtysh_ovsdb_config_logmsg(VTYSH_OVSDB_CONFIG_ERR,
+                    "unable to add lag access-list show running callback");
         assert(0);
         return;
     }

@@ -48,3 +48,15 @@ vtysh_ret_val show_run_access_list_callback(void *p_private);
  * @sa print_acl_mismatch_warning Another function for config mismatch warnings
  */
 vtysh_ret_val show_run_access_list_subcontext_callback(void *p_private);
+
+/**
+ * Callback routine for access-list show running-config lag subcontext handler
+ *
+ * @param  p_private Void pointer for holding address of vtysh_ovsdb_cbmsg_ptr
+ *                   structure object
+ *
+ * @return           e_vtysh_ok on success
+ *
+ * @sa print_acl_mismatch_warning Another function for config mismatch warnings
+ */
+vtysh_ret_val show_run_access_list_lag_subcontext_callback(void *p_private);

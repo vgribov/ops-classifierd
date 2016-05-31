@@ -61,6 +61,16 @@ int call_ofproto_ops_cls_replace(
     enum ops_cls_direction          direction,
     struct ops_cls_pd_status        *pd_status);
 
+int call_ofproto_cls_lag_update(
+    struct acl                     *acl,
+    struct port                    *bridge_port,
+    struct ofproto                 *ofproto,
+    ofp_port_t                      ofp_port,
+    enum ops_cls_lag_update_action  action,
+    struct ops_cls_interface_info  *interface_info,
+    enum ops_cls_direction          direction,
+    struct ops_cls_pd_status       *pd_status);
+
 int call_ofproto_ops_cls_list_update(
     struct acl                       *acl,
     struct ops_cls_pd_list_status    *status);

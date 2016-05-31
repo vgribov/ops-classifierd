@@ -192,9 +192,9 @@ const int64_t *acl_db_util_get_cfg_version(
  * @param[in] acl_db - Pointer to the @see acl_db_util structure
  * @param[in] port   - Pointer to the port row
  *
- * @returns cfg_status map of this port row.
+ * @returns cfg_status of this port row.
  */
-const struct smap* acl_db_util_get_cfg_status(
+const struct smap acl_db_util_get_cfg_status(
     const struct acl_db_util *acl_db, const struct ovsrec_port *port);
 
 /**

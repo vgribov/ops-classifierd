@@ -187,3 +187,38 @@ show_run_access_list_subcontext_callback(void *p_private)
     }
     return e_vtysh_ok;
 }
+
+vtysh_ret_val
+show_run_access_list_lag_subcontext_callback(void *p_private)
+{
+    vtysh_ovsdb_cbmsg_ptr p_msg = (vtysh_ovsdb_cbmsg *) p_private;
+    const struct ovsrec_port *port_row = NULL;
+    const struct ovsrec_acl *acl_row = NULL;
+    int i;
+
+    OVSREC_PORT_FOR_EACH(port_row, p_msg->idl) {
+        if (ACL_PORT_IS_LAG(port_row)) {
+            for (i = ACL_CFG_MIN_PORT_TYPES; i <= ACL_CFG_MAX_PORT_TYPES; i++) {
+                acl_row = acl_db_util_get_cfg(&acl_db_accessor[i], port_row);
+                if (port_row && acl_row) {
+                    if (acl_row !=
+                            acl_db_util_get_applied(&acl_db_accessor[i],
+                                                    port_row)) {
+                        vtysh_ovsdb_cli_print(p_msg,
+                                      "! access-list %s %s%s"
+                                      "! %s",
+                                      acl_row->name,
+                                      ACL_MISMATCH_WARNING,
+                                      VTY_NEWLINE,
+                                      ACL_MISMATCH_HINT_SHOW);
+                    }
+                    vtysh_ovsdb_cli_print(p_msg,
+                                          "    apply access-list ip %s %s",
+                                          acl_row->name,
+                                          acl_db_accessor[i].direction_str);
+                }
+            }
+        }
+    }
+    return e_vtysh_ok;
+}

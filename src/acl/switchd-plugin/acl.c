@@ -27,9 +27,29 @@
 #include "acl_port.h"
 #include "ops_cls_status_msgs.h"
 #include "ops_cls_status_table.h"
+#include "acl_db_util.h"
+#include "bridge.h"
+#include "vrf.h"
 
 VLOG_DEFINE_THIS_MODULE(acl_switchd_plugin_global);
 
+/**************************************************************************//**
+ * This function parses and validates the ipv4 address
+ *
+ * @param[in]   in_address - Pointer to string containig ipv4
+ *                           address
+ * @param[in]   flag       - Indicates valid src or dest ipv4
+ *                           address
+ * @param[out]  flags      - Contains valid src or dest ipv4
+ *                           address
+ * @param[in]   v4_addr    - Pointer to @see struct in_addr
+ * @param[in]   v4_mask    - Pointer to @see struct in_addr
+ * @param[out]  family     - Pointer to @see enum
+ *                           ops_cls_addr_family
+ *
+ * @return      true       - If the ipv4 address is valid
+                false      - If the address is not valid
+ *****************************************************************************/
 static bool
 acl_parse_ipv4_address(const char *in_address,
                        uint32_t flag,
@@ -76,6 +96,17 @@ acl_parse_ipv4_address(const char *in_address,
     return true;
 }
 
+/**************************************************************************//**
+ * This function parses the actions and populates the action
+ * flags in the classifier acl list
+ *
+ * @param[in]   acl_entry  - Pointer to @see struct
+ *                           ovsrec_acl_entry
+ * @param[in]   actions    - Pointer to @see struct
+ *                           ops_cls_list_entry_actions
+ *
+ * @return      true       - If the action is valid
+ *****************************************************************************/
 static bool
 acl_parse_actions(const struct ovsrec_acl_entry *acl_entry,
                   struct ops_cls_list_entry_actions *actions)
@@ -83,10 +114,8 @@ acl_parse_actions(const struct ovsrec_acl_entry *acl_entry,
     if (acl_entry->action) {
         if (strstr(acl_entry->action, "permit")) {
             actions->action_flags |= OPS_CLS_ACTION_PERMIT;
-        } else {
-            if (strstr(acl_entry->action, "deny")) {
-                actions->action_flags |= OPS_CLS_ACTION_DENY;
-            }
+        } else if (strstr(acl_entry->action, "deny")) {
+            actions->action_flags |= OPS_CLS_ACTION_DENY;
         }
     }
 
@@ -101,9 +130,24 @@ acl_parse_actions(const struct ovsrec_acl_entry *acl_entry,
     return true;
 }
 
+/**************************************************************************//**
+ * This function populates classifier ACL list entry from the
+ * OVSDB acl entry data
+ *
+ * @param[in]   entry     - Pointer to @see struct
+ *                          ops_cls_list_entry
+ * @param[in]   acl_entry - Pointer to @see struct
+ *                          ovsrec_acl_entry
+ *
+ * @return      true      - If source and destination ipv4
+ *                          addresses are valid and action is
+ *                          valid
+ *              false     - In case of invalid addresses or
+ *                          action
+ *****************************************************************************/
 static bool
 populate_entry_from_acl_entry(struct ops_cls_list_entry *entry,
-                                const struct ovsrec_acl_entry *acl_entry)
+                              const struct ovsrec_acl_entry *acl_entry)
 {
     bool valid = true;
 
@@ -195,6 +239,14 @@ populate_entry_from_acl_entry(struct ops_cls_list_entry *entry,
     return valid;
 }
 
+/**************************************************************************//**
+ * This function builds a classifier ACL list from the PI ACL
+ * data
+ *
+ * @param[in]   acl  - Pointer to @see struct acl
+ *
+ * @return             Pointer to struct ops_cls_list or NULL
+ *****************************************************************************/
 static struct ops_cls_list*
 ops_cls_list_new_from_acl(struct acl *acl)
 {
@@ -245,6 +297,14 @@ ops_cls_list_new_from_acl(struct acl *acl)
  *************************************************************/
 static struct hmap all_acls_by_uuid = HMAP_INITIALIZER(&all_acls_by_uuid);
 
+/**************************************************************************//**
+ * This function looks up an ACL in the global hashmap based on
+ * uuid
+ *
+ * @param[in]   uuid  - Pointer to @see struct uuid
+ *
+ * @return              Pointer to struct acl or NULL
+ *****************************************************************************/
 struct acl *
 acl_lookup_by_uuid(const struct uuid* uuid)
 {
@@ -263,7 +323,13 @@ acl_lookup_by_uuid(const struct uuid* uuid)
     return NULL;
 }
 
-
+/**************************************************************************//**
+ * This function returns ACL type for a given protocol string
+ *
+ * @param[in]   str  - Pointer to a string containing protocol
+ *
+ * @return      ops_cls_type
+ *****************************************************************************/
 static enum ops_cls_type
 acl_type_from_string(const char *str)
 {
@@ -276,11 +342,13 @@ acl_type_from_string(const char *str)
     }
 }
 
-/************************************************************
- * acl_create() and acl_delete() are low-level routines that deal with PI
- * acl data structures. They take care off all the memorary
- * management, hmap memberships, etc. They DO NOT make any PD calls.
- ************************************************************/
+/**************************************************************************//**
+ * This function creates an ACL in PI data structures. It
+ * doesn't make any PD call
+ *
+ * @param[in]   ovsdb_row    - Pointer to @see struct ovsrec_acl
+ * @param[in]   seqno        - IDL batch sequence number
+ *****************************************************************************/
 static struct acl*
 acl_create(const struct ovsrec_acl *ovsdb_row, unsigned int seqno)
 {
@@ -302,6 +370,12 @@ acl_create(const struct ovsrec_acl *ovsdb_row, unsigned int seqno)
     return acl;
 }
 
+/**************************************************************************//**
+ * This function deletes the ACL data from PI data structures.
+ * It doesn't make any PD call
+ *
+ * @param[in]   acl      - Pointer to @see struct acl
+ *****************************************************************************/
 static void
 acl_delete(struct acl* acl)
 {
@@ -324,6 +398,15 @@ acl_delete(struct acl* acl)
     free(acl);
 }
 
+/**************************************************************************//**
+ * This function sets ACL configuration status in OVSDB
+ *
+ * @param[in]   row      - Pointer to @see struct ovsrec_acl
+ * @param[in]   state    - State of the config status
+ * @param[in]   code     - Code of the config status
+ * @param[in]   details  - Buffer containing the config
+ *                         status message
+ *****************************************************************************/
 static void
 acl_set_cfg_status(const struct ovsrec_acl *row, char *state,
                    unsigned int code, char *details)
@@ -341,12 +424,118 @@ acl_set_cfg_status(const struct ovsrec_acl *row, char *state,
     ovsrec_acl_update_status_setkey(row, OPS_CLS_STATUS_MSG_STR, details);
 }
 
-/************************************************************
- * This function handles acl config update by making PD API
- * call and then updating ovsdb for the status
- ************************************************************/
+/**************************************************************************//**
+ * This function is called when there is an ACL config update.
+ * It checks if there is a port in a bridge on which application
+ * of this ACL was previously unsuccessful. If such a port is
+ * found, it tries to reapply the acl, since the ACL has been
+ * reconfigured.
+ *
+ * @param[in]   acl           - Pointer to @see struct acl
+ * @param[in]   br            - Pointer to @see struct bridge
+ * @param[in]   delete_seqno  - IDL batch sequence number
+ *****************************************************************************/
 static void
-acl_cfg_update(struct acl* acl)
+acl_cfg_check_ports_and_apply(struct acl *acl, struct bridge *br,
+                              unsigned int delete_seqno)
+{
+    struct port *port = NULL;
+    struct acl_port *acl_port = NULL;
+
+    if ((acl == NULL) || (br == NULL)) {
+        return;
+    }
+
+    HMAP_FOR_EACH(port, hmap_node, &br->ports) {
+        acl_port = acl_port_lookup(port->name);
+        if (acl_port == NULL) {
+            continue;
+        }
+        for (int acl_type_iter = ACL_CFG_MIN_PORT_TYPES;
+              acl_type_iter <= ACL_CFG_MAX_PORT_TYPES; acl_type_iter++) {
+            const struct ovsrec_acl *acl_row = acl_db_util_get_cfg(
+                                               &acl_db_accessor[acl_type_iter],
+                                               port->cfg);
+            if (acl_row == NULL) {
+                continue;
+            }
+
+            /* check if the acl configured on the port matches the
+             * acl that got updated
+             */
+            if ((strlen(acl->name) == strlen(acl_row->name)) &&
+                (strncmp(acl->name, acl_row->name, strlen(acl->name)) == 0)) {
+                const struct smap acl_status =
+                    acl_db_util_get_cfg_status(&acl_db_accessor[acl_type_iter],
+                                               port->cfg);
+                const char *status_str = smap_get(&acl_status,
+                                               OPS_CLS_STATUS_CODE_STR);
+
+                /* check if the acl application status on the port
+                 * was not successful
+                 */
+                if (status_str) {
+                    if (strtoul(status_str, NULL, 10) !=
+                            OPS_CLS_STATUS_SUCCESS) {
+                        acl_port->ovsdb_row = port->cfg;
+                        acl_port->delete_seqno = delete_seqno;
+
+                        VLOG_DBG("ACL row corresponding to port %s updated",
+                                 port->name);
+
+                        acl_port_map_cfg_update(
+                                &acl_port->port_map[acl_type_iter],
+                                port,
+                                br->ofproto);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**************************************************************************//**
+ * This function loops through all bridges and vrfs to check if
+ * the ACL needs to be applied on any ports
+ *
+ * @param[in]   acl           - Pointer to @see struct acl
+ * @param[in]   blk_params    - Pointer to @see struct blk_params
+ *****************************************************************************/
+static void
+acl_cfg_apply_if_needed(struct acl *acl, struct blk_params *blk_params)
+{
+    struct bridge *br = NULL;
+    struct vrf *vrf = NULL;
+
+    if ((acl == NULL) || (blk_params == NULL)) {
+        return;
+    }
+
+    HMAP_FOR_EACH(br, node, blk_params->all_bridges) {
+        if (br->ofproto == NULL) {
+            continue;
+        }
+        acl_cfg_check_ports_and_apply(acl, br, blk_params->idl_seqno);
+    }
+
+    HMAP_FOR_EACH(vrf, node, blk_params->all_vrfs) {
+        if ((vrf->up == NULL) || (vrf->up->ofproto == NULL)) {
+            continue;
+        }
+        acl_cfg_check_ports_and_apply(acl, vrf->up, blk_params->idl_seqno);
+    }
+}
+
+/**************************************************************************//**
+ * This function handles ACL config update by making PD API call
+ * if there are ports on which this acl was either successfully
+ * applied or rejected. It also updates ovsdb for the status
+ *
+ * @param[in]   acl           - Pointer to @see struct acl
+ * @param[in]   blk_params    - Pointer to @see struct blk_params
+ *****************************************************************************/
+static void
+acl_cfg_update(struct acl* acl, struct blk_params* blk_params)
 {
     /* Always translate/validate user input, so we can fail early
      * on unsupported values */
@@ -354,6 +543,7 @@ acl_cfg_update(struct acl* acl)
     char details[256];
     char status_str[OPS_CLS_STATUS_MSG_MAX_LEN] = {0};
     unsigned int sequence_number = 0;
+    struct ops_cls_list *saved_list = NULL;
     struct ops_cls_list *list = ops_cls_list_new_from_acl(acl);
 
     if (!list) {
@@ -367,8 +557,8 @@ acl_cfg_update(struct acl* acl)
         return;
     }
 
-    /* delete old PI cache of API obj, and remember new one */
-    ops_cls_list_delete(acl->cfg_pi);
+    /* save old PI cache of API obj, and remember new one */
+    saved_list = acl->cfg_pi;
     acl->cfg_pi = list;
 
     if (!list_is_empty(&acl->acl_port_map)) {
@@ -390,6 +580,12 @@ acl_cfg_update(struct acl* acl)
             /* status_str will be NULL on success */
             acl_set_cfg_status(acl->ovsdb_row, OPS_CLS_STATE_APPLIED_STR,
                                0, status_str);
+
+            /* Apply the updated ACL on ports that are applicable */
+            acl_cfg_apply_if_needed(acl, blk_params);
+
+            ops_cls_list_delete(saved_list);
+
         } else {
             snprintf(details, sizeof(details),
                     "ACL %s -- PD list_update failed for"
@@ -410,25 +606,31 @@ acl_cfg_update(struct acl* acl)
                                     OPS_CLS_STATUS_MSG_MAX_LEN,status_str);
             acl_set_cfg_status(acl->ovsdb_row, OPS_CLS_STATE_REJECTED_STR,
                                status.status_code, status_str);
+
+            ops_cls_list_delete(acl->cfg_pi);
+            acl->cfg_pi = saved_list;
         }
-    } else {
-        snprintf(details, sizeof(details),
-                "ACL %s -- Not applied. No PD call necessary",
-                acl->name);
-        VLOG_DBG(details);
+    }
+    else {
+        acl_cfg_apply_if_needed(acl, blk_params);
+
         ovsrec_acl_set_cur_aces(acl->ovsdb_row,
                                 acl->ovsdb_row->key_in_progress_aces,
                                 acl->ovsdb_row->value_in_progress_aces,
                                 acl->ovsdb_row->n_in_progress_aces);
         /* status_str will be NULL on success */
-        acl_set_cfg_status(acl->ovsdb_row, OPS_CLS_STATE_APPLIED_STR, 0, status_str);
+        acl_set_cfg_status(acl->ovsdb_row, OPS_CLS_STATE_APPLIED_STR,
+                           0, status_str);
+        ops_cls_list_delete(saved_list);
     }
 }
 
-/************************************************************
- * This function handles acl config delete by calling
- * acl_delete  that deals with the PI data structures only.
- ************************************************************/
+/**************************************************************************//**
+ * This function handles ACL config delete by calling
+ * acl_delete, that deals with the PI data structures only
+ *
+ * @param[in]   acl   - Pointer to @see struct acl
+ *****************************************************************************/
 static void
 acl_cfg_delete(struct acl* acl)
 {
@@ -438,9 +640,12 @@ acl_cfg_delete(struct acl* acl)
     acl_delete(acl);
 }
 
-/************************************************************
- * Top level routine to check if ACLs need to reconfigure
- ************************************************************/
+/**************************************************************************//**
+ * This function is the ACL feature plugin callback to handle
+ * updates in the ACL table. It is registered with the switchd.
+ *
+ * @param[in]   blk_params   - Pointer to @see struct blk_params
+ *****************************************************************************/
 void
 acl_reconfigure_init(struct blk_params *blk_params)
 {
@@ -501,7 +706,7 @@ acl_reconfigure_init(struct blk_params *blk_params)
             if (row_changed && acl_row->n_in_progress_version > 0 &&
                 acl_row->in_progress_version[0] >
                                    acl->in_progress_version) {
-                acl_cfg_update(acl);
+                acl_cfg_update(acl, blk_params);
                 acl->in_progress_version = acl_row->in_progress_version[0];
             }
         }
