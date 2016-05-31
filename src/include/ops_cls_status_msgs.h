@@ -45,6 +45,24 @@
 #define OPS_CLS_STATE_CANCELLED_STR    \
                 "cancelled"      /**< "cancelled" string for state smap   */
 
+/* Following macros define the strings that are used to set the hw_status.
+ * @todo ideally these macros should be defined in a header in the interface
+ * daemon repo in a shared location.
+ */
+#define OPS_INTF_HW_READY_KEY_STR                            \
+   "ready"                      /**< "ready" string for hw state           */
+#define OPS_INTF_HW_READY_BLOCKED_REASON_STR                 \
+   "ready_state_blocked_reason" /**< "blocked reason" string for hw state  */
+#define OPS_INTF_HW_READY_VALUE_STR_FALSE                    \
+   "false"                      /**< "false" string for hw state ready
+                                      value                                */
+#define OPS_INTF_HW_READY_VALUE_STR_TRUE                     \
+   "true"                       /**< "true" string for hw state ready
+                                     value                                 */
+#define OPS_INTF_HW_READY_BLOCKED_REASON_VALUE_STR_ACLS      \
+   "acls"                       /**< "acls" string for hw state ready blocked
+                                     reason                                */
+
 /* Following macros define the strings that can be used by the
  * callers to fill in variable operation str in ops_cls_status_msgs
  */
