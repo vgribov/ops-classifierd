@@ -1040,16 +1040,18 @@ acl_log_handle_clear_stats(const struct ovsrec_acl *acl)
 {
     int i;
 
-    for (i = 0; i < acl->n_cur_aces; i++) {
-        struct ace_stat_s *prev_stat;
+    if (baseline_stats.num > 0) {
+        for (i = 0; i < acl->n_cur_aces; i++) {
+            struct ace_stat_s *prev_stat;
 
-        /* check for a previous hit count for this ace */
-        HMAP_FOR_EACH_WITH_HASH(prev_stat, hnode,
-                uuid_hash(&acl->value_cur_aces[i]->header_.uuid),
-                &baseline_stats.map) {
-            if (uuid_equals(&acl->value_cur_aces[i]->header_.uuid,
-                        &prev_stat->uuid)) {
-                prev_stat->hit_count = 0;
+            /* check for a previous hit count for this ace */
+            HMAP_FOR_EACH_WITH_HASH(prev_stat, hnode,
+                    uuid_hash(&acl->value_cur_aces[i]->header_.uuid),
+                    &baseline_stats.map) {
+                if (uuid_equals(&acl->value_cur_aces[i]->header_.uuid,
+                            &prev_stat->uuid)) {
+                    prev_stat->hit_count = 0;
+                }
             }
         }
     }

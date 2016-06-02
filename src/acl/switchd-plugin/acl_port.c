@@ -31,6 +31,10 @@
 
 VLOG_DEFINE_THIS_MODULE(acl_switchd_plugin_port);
 
+static void
+acl_port_map_stats_get(struct acl_port_map *acl_port_map,
+                       struct ofproto *ofproto);
+
 /**************************************************************************//**
  * struct ops_cls_interface_info helper routine
  * Sets the interface_info structure
@@ -259,6 +263,7 @@ acl_port_map_update_cfg_internal(struct acl_port_map *acl_port_map,
                                                     acl_port_map->acl_db->direction,
                                                     &list_status);
                 acl_log_handle_clear_stats(ovsdb_acl);
+                acl_port_map_stats_get(acl_port_map, ofproto);
                 method_called = OPS_CLS_STATUS_MSG_OP_CLEAR_STR;
 
             }
