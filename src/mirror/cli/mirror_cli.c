@@ -208,8 +208,8 @@ cli_show_mirror_exec (const char *mirror_arg)
             /* print mirror detail */
             vty_out(vty, " Mirror Session: %s%s", mirror->name, VTY_NEWLINE);
 
-            mstate = smap_get (&mirror->mirror_status, MIRROR_CONFIG_OPERATION_STATE);
-            vty_out(vty, " Status: %s%s", (mstate ? mstate : MIRROR_CONFIG_STATE_SHUTDOWN),
+            mstate = smap_get (&mirror->mirror_status, MIRROR_STATUS_MAP_KEY_OPERATION_STATE);
+            vty_out(vty, " Status: %s%s", (mstate ? mstate : MIRROR_STATUS_MAP_STATE_SHUTDOWN),
                                                             VTY_NEWLINE);
 
             /* an array to flag which select_dst_ports are found to be 'both'
@@ -304,9 +304,9 @@ cli_show_mirror_exec (const char *mirror_arg)
                          "------------- --------------%s", VTY_NEWLINE);
          }
 
-         mstate = smap_get (&mirror->mirror_status, MIRROR_CONFIG_OPERATION_STATE);
+         mstate = smap_get (&mirror->mirror_status, MIRROR_STATUS_MAP_KEY_OPERATION_STATE);
          vty_out(vty, "%-63s %-14s%s", mirror->name,
-                      (mstate ? mstate : MIRROR_CONFIG_STATE_SHUTDOWN), VTY_NEWLINE);
+                      (mstate ? mstate : MIRROR_STATUS_MAP_STATE_SHUTDOWN), VTY_NEWLINE);
 
       }
 
@@ -951,6 +951,7 @@ output_iface_exec(const char* iface_name, bool delete)
    const struct ovsrec_port *port_row = NULL;
    struct ovsdb_idl_txn *txn = NULL;
    enum ovsdb_idl_txn_status txn_status;
+   bool active = false;
 
 
    /* a null interface is valid for delete case */
@@ -982,14 +983,22 @@ output_iface_exec(const char* iface_name, bool delete)
       /* if active mirror, no mirroring w/out destination/output. shutdown */
       if ((mirror->active != NULL) && (*mirror->active == true)) {
 
-         bool active = 0;
+         /* initially false 'active' used to shutdown mirror in db */
          ovsrec_mirror_set_active (mirror, &active, 1);
+
+         /* now repurpose 'active' to flag that this session *had* been active */
+         active = true;
       }
 
-      ovsrec_mirror_set_output_port(mirror, NULL);
-      vty_out (vty, "Destination interface removed, mirror session %s shutdown%s",
+      if (mirror->output_port) {
+         ovsrec_mirror_set_output_port(mirror, NULL);
+      }
+
+      if (active) {
+         vty_out (vty, "Destination interface removed, mirror session %s shutdown%s",
                                                                   mirror->name,
                                                                    VTY_NEWLINE);
+      }
 
    } else {
 
