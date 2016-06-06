@@ -1119,7 +1119,6 @@ acl_log_run(struct run_blk_params *blk_params)
         struct ds msg;
         struct acl_port *acl_port = NULL;
         struct acl *acl = NULL;
-        char port_name[8] = { 0 };
 
         /* We are in the state where we are waiting for packets, but we have
          * not received any packets, so return. */
@@ -1145,9 +1144,7 @@ acl_log_run(struct run_blk_params *blk_params)
 
         /* get ACL name from port number */
         if (ACL_LOG_INGRESS_PORT & pkt_buff.pkt_info.valid_fields) {
-            snprintf(port_name, sizeof(port_name), "%d",
-                    pkt_buff.pkt_info.ingress_port);
-            acl_port = acl_port_lookup(port_name);
+            acl_port = acl_port_lookup(pkt_buff.pkt_info.ingress_port_name);
             if (acl_port) {
                 acl = acl_port->port_map[ACL_CFG_V4_IN].hw_acl;
             }
@@ -1227,7 +1224,7 @@ acl_log_run(struct run_blk_params *blk_params)
                             pkt_buff.pkt_info.ingress_vlan);
             }
             if (ACL_LOG_INGRESS_PORT & pkt_buff.pkt_info.valid_fields) {
-                ds_put_format(&msg, "port %d, ", pkt_buff.pkt_info.ingress_port);
+                ds_put_format(&msg, "port %s, ", pkt_buff.pkt_info.ingress_port_name);
             }
         }
 
