@@ -320,7 +320,7 @@ cli_show_mirror_exec (const char *mirror_arg)
       } else {
             vty_out(vty, "Invalid mirror session '%s'%s", mirror_arg, VTY_NEWLINE);
       }
-      return CMD_ERR_NOTHING_TODO;
+      return CMD_OVSDB_FAILURE;
    }
 
    return CMD_SUCCESS;
