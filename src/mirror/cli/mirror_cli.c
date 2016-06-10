@@ -585,6 +585,37 @@ is_iface_a_port (const char* iface)
    return NULL;
 }
 
+
+/* Mirror source & dest Interfaces can only include frontplane ports -
+ * interfaces or LAGs. VLAN, tunnel or other interfaces are not supported.
+ * An interface/LAG is an ovsrec_port with one/many member
+ * ovsrec_interfaces of type 'system'.
+ */
+const struct ovsrec_port*
+is_iface_valid (const char* iface)
+{
+
+   const struct ovsrec_port *port_row = NULL;
+   const struct ovsrec_interface* intf_row = NULL;
+   int i = 0;
+
+   port_row = is_iface_a_port(iface);
+   if ((port_row == NULL) || (port_row->n_interfaces == 0)) {
+      return NULL;
+   }
+
+   for (i = 0; i < port_row->n_interfaces; i++) {
+
+      intf_row = port_row->interfaces[i];
+      if (strcmp(intf_row->type, OVSREC_INTERFACE_TYPE_SYSTEM) != 0) {
+         /* this interface is not of type 'system' (physical port) */
+         return NULL;
+      }
+   }
+   return port_row;
+}
+
+
 /* utility to determine if a mirror is active */
 bool
 is_mirror_active(const struct ovsrec_mirror *mirror)
@@ -778,7 +809,7 @@ source_iface_exec(const char* iface_name, const char* direction, bool delete)
    enum ovsdb_idl_txn_status txn_status;
    int rc = CMD_SUCCESS;
 
-   port_row = is_iface_a_port(iface_name);
+   port_row = is_iface_valid(iface_name);
    if (NULL == port_row) {
       vty_out (vty, "Invalid interface %s%s", iface_name, VTY_NEWLINE);
       return CMD_ERR_NOTHING_TODO;
@@ -806,20 +837,12 @@ source_iface_exec(const char* iface_name, const char* direction, bool delete)
 
    if (delete) {
 
-      if ((rc == CMD_SUCCESS) &&
-          /* remove interface src/rx on null (both) or 'rx' */
-          ((direction == NULL) || (strncmp(direction, SRC_DIR_RX,
-                                          MAX_SRC_DIR_LEN) == 0)) &&
-           (is_port_in_src_set(mirror, port_row))) {
+      if ((rc == CMD_SUCCESS) && (is_port_in_src_set(mirror, port_row))) {
 
          rc = update_src_port (mirror, port_row, true);
       }
 
-      if ((rc == CMD_SUCCESS) &&
-          /* remove interface dst/tx on null (both) or 'tx' */
-          ((direction == NULL) || (strncmp(direction, SRC_DIR_TX,
-                                          MAX_SRC_DIR_LEN) == 0)) &&
-           (is_port_in_dst_set(mirror, port_row))) {
+      if ((rc == CMD_SUCCESS) && (is_port_in_dst_set(mirror, port_row))) {
 
          rc = update_dst_port (mirror, port_row, true);
       }
@@ -1002,7 +1025,7 @@ output_iface_exec(const char* iface_name, bool delete)
 
    } else {
 
-      port_row = is_iface_a_port(iface_name);
+      port_row = is_iface_valid(iface_name);
       if (port_row == NULL) {
 
          vty_out (vty, "Invalid interface %s%s", iface_name, VTY_NEWLINE);
@@ -1371,13 +1394,14 @@ DEFUN (cli_mirror_source_iface_dir,
 
 }
 
-DEFUN (cli_mirror_no_source_iface_dir,
-       cli_mirror_no_source_iface_dir_cmd,
-       "no source interface INTERFACE {rx|tx}",
+DEFUN (cli_mirror_no_source_iface,
+       cli_mirror_no_source_iface_cmd,
+       "no source interface INTERFACE {both|rx|tx}",
        NO_STR
        SRC_HELPSTR
        IFACE_HELPSTR
        IFACE_NAME_HELPSTR
+       SRC_DIR_BOTH_HELPSTR
        SRC_DIR_RX_HELPSTR
        SRC_DIR_TX_HELPSTR)
 {
@@ -1386,14 +1410,7 @@ DEFUN (cli_mirror_no_source_iface_dir,
       return 1;
    }
 
-
-   if (argv[1] != NULL) {
-      return source_iface_exec((const char*)argv[0], (const char*)argv[1], true);
-   } else if (argv[2] != NULL) {
-      return source_iface_exec((const char*)argv[0], (const char*)argv[2], true);
-   } else {
-      return source_iface_exec((const char*)argv[0], NULL, true);
-   }
+   return source_iface_exec((const char*)argv[0], NULL, true);
 
 }
 
@@ -1494,7 +1511,7 @@ mirror_vty_init(void)
     install_element(MIRROR_NODE, &cli_mirror_no_output_iface_cmd);
 
     install_element(MIRROR_NODE, &cli_mirror_source_iface_dir_cmd);
-    install_element(MIRROR_NODE, &cli_mirror_no_source_iface_dir_cmd);
+    install_element(MIRROR_NODE, &cli_mirror_no_source_iface_cmd);
 
     install_element(MIRROR_NODE, &cli_mirror_shutdown_cmd);
     install_element(MIRROR_NODE, &cli_mirror_no_shutdown_cmd);
