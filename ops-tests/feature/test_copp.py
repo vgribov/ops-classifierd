@@ -207,114 +207,8 @@ def getstatsvalue(coppstatsresp, classtype, field, unsuppresponseval=-1):
     return -2
 
 
-@mark.test_id(10400)
-@mark.platform_incompatible(['ostl'])
-def test_copp_container(topology):
-    """
-    Test that copp stats is functional with a OpenSwitch switch.
-    """
-    setup_topo(topology)
-
-    hs1 = topology.get('hs1')
-    ops1 = topology.get('ops1')
-
-    # Give the openswitch container time to start up or the ports
-    # won't be present in openvswitch
-    print("Waiting 5 seconds for OPS DOCKER to stabilize...")
-    # set_trace()
-    sleep(5)
-
-    print("##################################################")
-    print("Test COPP stats by pinging the switch")
-    print("##################################################")
-
-    # set_trace()
-
-    # Ping the switch
-    hs1.send_command('ping -i 0.5 10.0.10.10 > /dev/null &', shell='bash')
-
-    # Stop the ping
-    # hs1.send_command('kill -9 -1', shell='bash')
-    response = ops1.send_command('show copp statistics', shell='vtysh')
-
-    pktcount1 = getstatsvalue(response, 'UNCLASSIFIED', f_pkts)
-    print("packet count is %s" % pktcount1)
-    # On a slow host things don't go smoothly, attempt to adapt by allowing
-    # more time to get a valid first read of the packet count
-    retries = 40
-    while int(pktcount1) < 0 and int(retries) > 0:
-        print("(%s) Packet count %s was invalid, trying again" %
-              (retries, pktcount1))
-        sleep(1)
-        response = ops1.send_command('show copp statistics', shell='vtysh')
-        pktcount1 = getstatsvalue(response, 'UNCLASSIFIED', f_pkts)
-        retries -= 1
-
-    assert int(pktcount1) > -1, "Invalid UNCLASSIFIED packet count"
-
-    # Grab the other stats too for comparison later
-    bytes1 = getstatsvalue(response, 'UNCLASSIFIED', bytes)
-
-    print("Pause to give time for stats to update...")
-    sleep(5)
-
-    # Stop the ping
-    hs1.send_command('pkill ping', shell='bash')
-
-    response = ops1.send_command('show copp statistics', shell='vtysh')
-
-    # get the total for UNCLASSIFIED
-    pktcount2 = getstatsvalue(response, 'UNCLASSIFIED', f_pkts)
-    # On a slow host things don't go smoothly, attempt to adapt by allowing
-    # more time to get a valid second read of the packet count
-    retries = 40
-    while int(retries) > 0 and int(pktcount1) == int(pktcount2):
-        print("(%s) New packet count is %s, same as old. Delay for more time" %
-              (retries, pktcount2))
-        sleep(1)
-        response = ops1.send_command('show copp statistics', shell='vtysh')
-        pktcount2 = getstatsvalue(response, 'UNCLASSIFIED', f_pkts)
-        retries -= 1
-
-    print("New packet count is %s" % pktcount2)
-    bytes2 = getstatsvalue(response, 'UNCLASSIFIED', f_bytes)
-    dropcount = getstatsvalue(response, 'UNCLASSIFIED', f_drops)
-    dropbytes = getstatsvalue(response, 'UNCLASSIFIED', f_dropbytes)
-
-    # Packet count should have increased
-    assert int(pktcount1) < int(pktcount2), "Packet count didn't increase"
-    assert int(bytes1) < int(bytes2), "Byte count didn't increase"
-    assert int(dropcount) == 0, "Drop count should be zero"
-    assert int(dropbytes) == -1, "Drop bytes should be unsupported"
-
-    # get the overall Totals
-    pktcounttotal = getstatsvalue(response, 'Total', f_pkts)
-    bytestotal = getstatsvalue(response, 'Total', f_bytes)
-    dropcounttotal = getstatsvalue(response, 'Total', f_drops)
-    dropbytestotal = getstatsvalue(response, 'Total', f_dropbytes)
-
-    # Total better match Unclassified because it is the only
-    # class with copp statistics in the container
-    assert int(pktcount2) == int(pktcounttotal), \
-        "Total packets does not match only class with data"
-    assert int(bytestotal) == int(bytes2), \
-        "Total bytes does not match only class with data"
-    assert int(dropcounttotal) == 0, \
-        "Total drops should be zero"
-    assert int(dropbytestotal) == 0, \
-        "Total drop bytes should be zero"
-    # Check the hw stats values
-    rateval = getstatsvalue(response, 'UNCLASSIFIED', f_rate)
-    burstval = getstatsvalue(response, 'UNCLASSIFIED', f_burst)
-    prival = getstatsvalue(response, 'UNCLASSIFIED', f_pri)
-    assert int(rateval) == 1000000000, "Incorrect rate value"
-    assert int(burstval) == 1000000000, "Incorrect burst value"
-    assert int(prival) == 0, "Incorrect priority"
-
-
 @mark.test_id(10450)
-@mark.platform_incompatible(['docker'])
-def test_copp_hw(topology):
+def test_copp_stats(topology):
     """
     Test that copp stats is functional with a OpenSwitch switch.
     """
@@ -341,8 +235,11 @@ def test_copp_hw(topology):
     response = ops1.send_command('show copp statistics', shell='vtysh')
 
     pktcount1 = getstatsvalue(response, 'ICMPv4 UNICAST', f_pkts)
+    print("##################################################")
+    print(" pktcount1 is %s" % pktcount1)
+    print("##################################################")
 
-    retries = 40
+    retries = 5
     while int(pktcount1) < 0 and int(retries) > 0:
         print("(%s) Packet count %s was invalid, trying again" %
               (retries, pktcount1))
@@ -351,95 +248,157 @@ def test_copp_hw(topology):
         pktcount1 = getstatsvalue(response, 'ICMPv4 UNICAST', f_pkts)
         retries -= 1
 
-    assert int(pktcount1) > -1, "Invalid ICMPv4 UNICAST packet count"
+    if int(pktcount1) == -1:
+        print("ICMPv4 UNICAST class type not supported")
+        # If class not supported , pkts go to default UNCLASSIFIED queue
+        print("Checking packets in UNCLASSIFIED queue")
 
-    print("packet count is %s" % pktcount1)
+        # Grab the other stats too for comparison later
+        bytes1 = getstatsvalue(response, 'UNCLASSIFIED', bytes)
 
-    # Grab the other stats too for comparison later
-    bytes1 = getstatsvalue(response, 'ICMPv4 UNICAST', bytes)
+        print("Pause to give time for stats to update...")
+        sleep(10)
 
-    print("Pause to give time for stats to update...")
-    sleep(10)
+        # Stop the ping
+        hs1.send_command('pkill ping', shell='bash')
 
-    # Stop the ping
-    hs1.send_command('pkill ping', shell='bash')
+        response = ops1.send_command('show copp statistics', shell='vtysh')
 
-    response = ops1.send_command('show copp statistics', shell='vtysh')
+        # get the total for UNCLASSIFIED
+        pktcountunclassified = getstatsvalue(response, 'UNCLASSIFIED', f_pkts)
+        print("New packet count is %s" % pktcountunclassified)
+        bytes2 = getstatsvalue(response, 'UNCLASSIFIED', f_bytes)
+        dropcount = getstatsvalue(response, 'UNCLASSIFIED', f_drops)
+        dropbytes = getstatsvalue(response, 'UNCLASSIFIED', f_dropbytes)
 
-    # get the total for UNCLASSIFIED
-    pktcounticmpv4u = getstatsvalue(response, 'ICMPv4 UNICAST', f_pkts)
-    print("New packet count is %s" % pktcounticmpv4u)
-    bytes2 = getstatsvalue(response, 'ICMPv4 UNICAST', f_bytes)
-    dropcount = getstatsvalue(response, 'ICMPv4 UNICAST', f_drops)
-    dropbytes = getstatsvalue(response, 'ICMPv4 UNICAST', f_dropbytes)
+        # Packet count should have increased
+        assert int(pktcount1) < int(pktcountunclassified), \
+            "Packet count didn't increase"
+        assert int(bytes1) < int(bytes2), "Byte count didn't increase"
+        assert int(dropcount) == 0, "Drop count should be zero"
+        assert int(dropbytes) == -1, "Drop bytes should be unsupported"
 
-    # Packet count should have increased
-    assert int(pktcount1) < int(pktcounticmpv4u), \
-        "Packet count didn't increase"
-    assert int(bytes1) < int(bytes2), "Byte count didn't increase"
-    assert int(dropcount) == 0, "Drop count should be zero"
-    assert int(dropbytes) == 0, "Drop bytes should be zero"
+        # Check the hw stats values
+        rateval = getstatsvalue(response, 'UNCLASSIFIED', f_rate)
+        burstval = getstatsvalue(response, 'UNCLASSIFIED', f_burst)
+        prival = getstatsvalue(response, 'UNCLASSIFIED', f_pri)
+        assert int(rateval) == 1000000000, "Incorrect rate value"
+        assert int(burstval) == 1000000000, "Incorrect burst value"
+        assert int(prival) == 0, "Incorrect priority"
+
+        # Get the total packet and bytes count
+        pktcounttotal = getstatsvalue(response, 'Total', f_pkts)
+        bytestotal = getstatsvalue(response, 'Total', f_bytes)
+
+        print("\nChecking total packets and unclassified packets")
+        # Total better match the sum of all the classes
+        assert int(pktcounttotal) == int(pktcountunclassified), \
+            "Total packets should match unclassified packets"
+        assert int(bytestotal) == int(bytes2), \
+            "Total bytes should match unclassified bytes"
+
+    else:
+        print("packet count is %s" % pktcount1)
+
+        # Grab the other stats too for comparison later
+        bytes1 = getstatsvalue(response, 'ICMPv4 UNICAST', bytes)
+
+        print("Pause to give time for stats to update...")
+        sleep(10)
+
+        # Stop the ping
+        hs1.send_command('pkill ping', shell='bash')
+
+        response = ops1.send_command('show copp statistics', shell='vtysh')
+
+        # get the total for UNCLASSIFIED
+        pktcounticmpv4u = getstatsvalue(response, 'ICMPv4 UNICAST', f_pkts)
+        print("New packet count is %s" % pktcounticmpv4u)
+        bytes2 = getstatsvalue(response, 'ICMPv4 UNICAST', f_bytes)
+        dropcount = getstatsvalue(response, 'ICMPv4 UNICAST', f_drops)
+        dropbytes = getstatsvalue(response, 'ICMPv4 UNICAST', f_dropbytes)
+
+        # Packet count should have increased
+        assert int(pktcount1) < int(pktcounticmpv4u), \
+            "Packet count didn't increase"
+        assert int(bytes1) < int(bytes2), "Byte count didn't increase"
+        assert int(dropcount) == 0, "Drop count should be zero"
+        assert int(dropbytes) == 0, "Drop bytes should be zero"
 
     print("##################################################")
     print("Test COPP stats by pinging another host")
     print("##################################################")
 
     pktcount1 = getstatsvalue(response, 'ARP BROADCAST', f_pkts)
-    # Ping some other host and check that the ICMP stats don't change
-    hs1.send_command('ping -i 0.5 10.0.10.20 > /dev/null &', shell='bash')
 
-    print("Pause to give time for stats to update...")
-    sleep(10)
+    if pktcount1 != -1:
+        # Ping some other host and check that the ICMP stats don't change
+        hs1.send_command('ping -i 0.5 10.0.10.20 > /dev/null &', shell='bash')
 
-    # Stop the ping
-    hs1.send_command('pkill ping', shell='bash')
+        print("Pause to give time for stats to update...")
+        sleep(10)
 
-    # retrieve updated stats
-    response = ops1.send_command('show copp statistics', shell='vtysh')
+        # Stop the ping
+        hs1.send_command('pkill ping', shell='bash')
 
-    pktcountarpb = getstatsvalue(response, 'ARP BROADCAST', f_pkts)
-    assert int(pktcount1) < int(pktcountarpb), "Packet count didn't increase"
+        # retrieve updated stats
+        response = ops1.send_command('show copp statistics', shell='vtysh')
 
-    # Check the hw stats values
-    rateval = getstatsvalue(response, 'UNCLASSIFIED', f_rate)
-    burstval = getstatsvalue(response, 'UNCLASSIFIED', f_burst)
-    assert int(rateval) != 0, "Rate should not be zero"
-    assert int(burstval) != 0, "Burst value should not be zero"
+        pktcountarpb = getstatsvalue(response, 'ARP BROADCAST', f_pkts)
+        assert int(pktcount1) < int(pktcountarpb), "Pkt count didn't increase"
 
-    print("##################################################")
-    print("Test COPP stats verify totals are correct")
-    print("##################################################")
+        # Check the hw stats values
+        rateval = getstatsvalue(response, 'UNCLASSIFIED', f_rate)
+        burstval = getstatsvalue(response, 'UNCLASSIFIED', f_burst)
+        assert int(rateval) != 0, "Rate should not be zero"
+        assert int(burstval) != 0, "Burst value should not be zero"
 
-    pktcountbgp = getstatsvalue(response, 'BGP', f_pkts, 0)
-    pktcountlldp = getstatsvalue(response, 'LLDP', f_pkts, 0)
-    pktcountlacp = getstatsvalue(response, 'LACP', f_pkts, 0)
-    pktcountospfv2u = getstatsvalue(response, 'OSPFV2 unicast', f_pkts, 0)
-    pktcountospfv2m = getstatsvalue(response, 'OSPFV2 multicast', f_pkts, 0)
-    # pktcountarpb = getstatsvalue(response, 'ARP BROADCAST', f_pkts, 0)
-    pktcountarpu = getstatsvalue(response, 'ARP UNICAST', f_pkts, 0)
-    pktcountdhcpv4 = getstatsvalue(response, 'DHCPv4', f_pkts, 0)
-    pktcountdhcpv6 = getstatsvalue(response, 'DHCPv6', f_pkts, 0)
-    pktcounticmpv4u = getstatsvalue(response, 'ICMPv4 UNICAST', f_pkts, 0)
-    pktcounticmpv4m = getstatsvalue(response, 'ICMPv4 MULTIDEST', f_pkts, 0)
-    pktcounticmpv6u = getstatsvalue(response, 'ICMPv6 UNICAST', f_pkts, 0)
-    pktcounticmpv6m = getstatsvalue(response, 'ICMPv6 MULTICAST', f_pkts, 0)
-    pktcountunk = getstatsvalue(response, 'UNKNOWN', f_pkts, 0)
-    pktcountuncl = getstatsvalue(response, 'UNCLASSIFIED', f_pkts)
-    pktcountsflow = getstatsvalue(response, 'sFLOW', f_pkts, 0)
-    pktcountacll = getstatsvalue(response, 'ACL LOGGING', f_pkts, 0)
+        print("##################################################")
+        print("Test COPP stats verify totals are correct")
+        print("##################################################")
 
-    # get the overall Totals
-    pktcounttotal = getstatsvalue(response, 'Total', f_pkts)
-    bytestotal = getstatsvalue(response, 'Total', f_bytes)
+        pktcountbgp = getstatsvalue(response, 'BGP', f_pkts, 0)
+        pktcountlldp = getstatsvalue(response, 'LLDP', f_pkts, 0)
+        pktcountlacp = getstatsvalue(response, 'LACP', f_pkts, 0)
+        pktcountospfv2u = getstatsvalue(response, 'OSPFV2 unicast', f_pkts, 0)
+        pktcountospfv2m = getstatsvalue(response, 'OSPFV2 multicast',
+                                        f_pkts, 0)
+        pktcountarpu = getstatsvalue(response, 'ARP UNICAST', f_pkts, 0)
+        pktcountdhcpv4 = getstatsvalue(response, 'DHCPv4', f_pkts, 0)
+        pktcountdhcpv6 = getstatsvalue(response, 'DHCPv6', f_pkts, 0)
+        pktcounticmpv4u = getstatsvalue(response, 'ICMPv4 UNICAST', f_pkts, 0)
+        pktcounticmpv4m = getstatsvalue(response, 'ICMPv4 MULTIDEST',
+                                        f_pkts, 0)
+        pktcounticmpv6u = getstatsvalue(response, 'ICMPv6 UNICAST', f_pkts, 0)
+        pktcounticmpv6m = getstatsvalue(response, 'ICMPv6 MULTICAST',
+                                        f_pkts, 0)
+        pktcountunk = getstatsvalue(response, 'UNKNOWN', f_pkts, 0)
+        pktcountuncl = getstatsvalue(response, 'UNCLASSIFIED', f_pkts)
+        pktcountsflow = getstatsvalue(response, 'sFLOW', f_pkts, 0)
+        pktcountacll = getstatsvalue(response, 'ACL LOGGING', f_pkts, 0)
+        pktcountv4options = getstatsvalue(response, 'ipv4-options',
+                                          f_pkts, 0)
+        pktcountv6options = getstatsvalue(response, 'ipv6-options',
+                                          f_pkts, 0)
+        pktcountstp = getstatsvalue(response, 'STP',
+                                    f_pkts, 0)
 
-    sumpktcount = int(pktcountbgp) + int(pktcountlldp) + int(pktcountlacp) + \
-        int(pktcountospfv2u) + int(pktcountospfv2m) + int(pktcountarpb) + \
-        int(pktcountarpu) + int(pktcountdhcpv4) + int(pktcountdhcpv6) + \
-        int(pktcounticmpv4u) + int(pktcounticmpv4m) + int(pktcounticmpv6u) + \
-        int(pktcounticmpv6m) + int(pktcountunk) + int(pktcountuncl) + \
-        int(pktcountsflow) + int(pktcountacll)
-    # Total better match the sum of all the classes
-    assert int(pktcounttotal) == int(sumpktcount), \
-        "Total packets should match sum"
-    assert int(bytestotal), \
-        "Total bytes should not be zero"
+        # get the overall Totals
+        pktcounttotal = getstatsvalue(response, 'Total', f_pkts)
+        bytestotal = getstatsvalue(response, 'Total', f_bytes)
+
+        sumpktcount = int(pktcountbgp) + int(pktcountlldp) + \
+            int(pktcountlacp) + int(pktcountospfv2u) + \
+            int(pktcountospfv2m) + int(pktcountarpb) + \
+            int(pktcountarpu) + int(pktcountdhcpv4) + \
+            int(pktcountdhcpv6) + int(pktcounticmpv4u) + \
+            int(pktcounticmpv4m) + int(pktcounticmpv6u) + \
+            int(pktcounticmpv6m) + int(pktcountunk) + \
+            int(pktcountuncl) + int(pktcountsflow) + int(pktcountacll) + \
+            int(pktcountv4options) + int(pktcountv6options) + int(pktcountstp)
+
+        # Total better match the sum of all the classes
+        assert int(pktcounttotal) == int(sumpktcount), \
+            "Total packets should match sum"
+        assert int(bytestotal), \
+            "Total bytes should not be zero"
