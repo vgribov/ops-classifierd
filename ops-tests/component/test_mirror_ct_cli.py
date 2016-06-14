@@ -423,6 +423,28 @@ def case_21_mirror_session_with_destination_lag_succeeds():
     ops1(format('no mirror session bar'))
     ops1(format('end'))
 
+def case_22_add_mirror_non_system_source_interface_fails():
+    ops1(format('configure terminal'))
+    ops1(format('mirror session non_system'))
+    out = ops1(format('source interface bridge_normal rx'))
+    assert 'Invalid interface' in out
+    ops1(format('end'))
+
+    ops1(format('configure terminal'))
+    ops1(format('no mirror session non_system'))
+    ops1(format('end'))
+
+def case_23_add_mirror_non_system_destination_interface_fails():
+    ops1(format('configure terminal'))
+    ops1(format('mirror session non_system'))
+    out = ops1(format('destination interface bridge_normal'))
+    assert 'Invalid interface' in out
+    ops1(format('end'))
+
+    ops1(format('configure terminal'))
+    ops1(format('no mirror session non_system'))
+    ops1(format('end'))
+
 @pytest.mark.skipif(True, reason="Once all pd/pi mirror code has been merged, enable this.")
 def test_mirror_ct_cli(topology, setup):
     case_1_activate_ms_foo_succeeds()
@@ -446,3 +468,5 @@ def test_mirror_ct_cli(topology, setup):
     case_19_create_lag_succeeds()
     case_20_mirror_session_with_source_lag_succeeds()
     case_21_mirror_session_with_destination_lag_succeeds()
+    case_22_add_mirror_non_system_source_interface_fails()
+    case_23_add_mirror_non_system_destination_interface_fails()
