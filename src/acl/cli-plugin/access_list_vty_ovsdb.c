@@ -646,7 +646,7 @@ cli_print_acls (const char *interface_type,
                     if (!aces_cur_cfg_mismatch && !aces_cur_cfg_equal(port_row->aclv4_in_applied)) {
                         aces_cur_cfg_mismatch = true;
                     }
-                } else if (port_row->aclv4_in_cfg == acl_row) {
+                } else if (configuration && port_row->aclv4_in_cfg == acl_row) {
                     print_acl_apply_commands("interface", port_row->name, "in", port_row->aclv4_in_cfg);
                     if (!aces_cur_cfg_mismatch && !aces_cur_cfg_equal(port_row->aclv4_in_cfg)) {
                         aces_cur_cfg_mismatch = true;
@@ -663,7 +663,7 @@ cli_print_acls (const char *interface_type,
                     if (!aces_cur_cfg_mismatch && !aces_cur_cfg_equal(vlan_row->aclv4_in_applied)) {
                         aces_cur_cfg_mismatch = true;
                     }
-                } else if (vlan_row->aclv4_in_cfg == acl_row) {
+                } else if (configuration && vlan_row->aclv4_in_cfg == acl_row) {
                     print_acl_apply_commands("vlan", vlan_id_str, "in", vlan_row->aclv4_in_cfg);
                     if (!aces_cur_cfg_mismatch && !aces_cur_cfg_equal(vlan_row->aclv4_in_cfg)) {
                         aces_cur_cfg_mismatch = true;
