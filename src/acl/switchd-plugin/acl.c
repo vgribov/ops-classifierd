@@ -393,8 +393,8 @@ acl_cfg_update(struct acl* acl)
         } else {
             snprintf(details, sizeof(details),
                     "ACL %s -- PD list_update failed for"
-                    " acl entry = %u and port = %s", acl->name,
-                     status.entry_id, netdev_get_name(status.port->netdev));
+                    " acl entry = %u", acl->name,
+                     status.entry_id);
             VLOG_DBG(details);
             /* Convert entry_id to sequence_number using in_progress aces */
             if(status.entry_id < acl->ovsdb_row->n_in_progress_aces) {
@@ -405,7 +405,7 @@ acl_cfg_update(struct acl* acl)
                                     OPS_CLS_STATUS_MSG_OP_UPDATE_STR,
                                     OPS_CLS_STATUS_MSG_FEATURE_ACL_STR,
                                     OPS_CLS_STATUS_MSG_IFACE_PORT_STR,
-                                    netdev_get_name(status.port->netdev),
+                                    NULL,
                                     sequence_number,
                                     OPS_CLS_STATUS_MSG_MAX_LEN,status_str);
             acl_set_cfg_status(acl->ovsdb_row, OPS_CLS_STATE_REJECTED_STR,

@@ -196,8 +196,16 @@ void ops_cls_status_msgs_get(enum ops_cls_list_status_code status_code,
             /* invalid entry sequence number, so format the string without
              * entry sequence number string.
              */
-            snprintf(status_msg_str,len,status_table_str,op_str,feature_str,
-                     iface_str,iface_num,OPS_CLS_STATUS_MSG_SEQ_NUM_INVALID);
+            if (iface_num) {
+                snprintf(status_msg_str,len,status_table_str,
+                         op_str,feature_str,
+                         iface_str,iface_num,
+                         OPS_CLS_STATUS_MSG_SEQ_NUM_INVALID);
+            } else {
+                snprintf(status_msg_str,len,status_table_str,
+                         op_str,feature_str,
+                         OPS_CLS_STATUS_MSG_SEQ_NUM_INVALID);
+            }
         } else {
             /* valid entry sequence number, so format the string using
              * entry sequence number.
@@ -205,8 +213,14 @@ void ops_cls_status_msgs_get(enum ops_cls_list_status_code status_code,
             snprintf(seq_num_str,OPS_CLS_STATUS_MSG_SEQ_NUM_STR_LEN,
                      OPS_CLS_STATUS_MSG_SEQ_NUM_VALID,seq_num);
 
-            snprintf(status_msg_str,len,status_table_str,op_str,feature_str,
-                     iface_str,iface_num,seq_num_str);
+            if (iface_num) {
+                snprintf(status_msg_str,len,status_table_str,
+                         op_str,feature_str,
+                         iface_str,iface_num,seq_num_str);
+            } else {
+                snprintf(status_msg_str,len,status_table_str,
+                         op_str,feature_str, seq_num_str);
+            }
 
         } /* end if seq_num == 0 */
     } /* end if status_table_str != NULL */
