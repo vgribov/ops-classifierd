@@ -26,6 +26,10 @@ set (CLS_INCLUDE_DIR ${OPS_CLS_SOURCE_DIR}/include)
 set (CLS_ACL_DIR ${OPS_CLS_SOURCE_DIR}/acl)
 # ACL daemon source dir under ${CLS_ACL_DIR}
 set (ACL_DAEMON_DIR ${CLS_ACL_DIR}/daemon)
+# ACL util source dir under ${CLS_ACL_DIR} for the daemon
+set (ACL_UTIL_DIR ${CLS_ACL_DIR}/util)
+# ACL include source dir under ${CLS_ACL_DIR} for the daemon
+set (ACL_INCLUDE_DIR ${CLS_ACL_DIR}/include)
 
 MESSAGE("PROJECT_SRC_DIR=${PROJECT_SOURCE_DIR}")
 MESSAGE("OPS_CLS_SOURCE_DIR=${OPS_CLS_SOURCE_DIR}")
@@ -34,6 +38,8 @@ MESSAGE("CLS_COMMON_DIR=${CLS_COMMON_DIR}")
 MESSAGE("CLS_INCLUDE_DIR=${CLS_INCLUDE_DIR}")
 MESSAGE("CLS_ACL_DIR=${CLS_ACL_DIR}")
 MESSAGE("ACL_DAEMON_DIR=${ACL_DAEMON_DIR}")
+MESSAGE("ACL_UTIL_DIR=${ACL_UTIL_DIR}")
+MESSAGE("ACL_INCLUDE_DIR=${ACL_INCLUDE_DIR}")
 
 # Define compile flags
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99 -Wall -Werror")
@@ -46,14 +52,15 @@ pkg_check_modules(OVSDB REQUIRED libovsdb)
 
 include_directories (${PROJECT_BINARY_DIR} ${PROJECT_SOURCE_DIR}/${INCL_DIR}
                      ${OVSCOMMON_INCLUDE_DIRS} ${OPS_CLS_INCLUDE_DIR}
-                     ${CLS_INCLUDE_DIR} )
+                     ${CLS_INCLUDE_DIR} ${ACL_INCLUDE_DIR})
 
 # Sources to build ops-classifierd
 set (SOURCES ${OPS_CLS_SOURCE_DIR}/classifierd.c
              ${OPS_CLS_SOURCE_DIR}/classifierd_ovsdb_util.c
              ${ACL_DAEMON_DIR}/acl_daemon_init.c
              ${ACL_DAEMON_DIR}/acl_daemon_acls.c
-             ${ACL_DAEMON_DIR}/acl_daemon_ports.c)
+             ${ACL_DAEMON_DIR}/acl_daemon_ports.c
+             ${ACL_UTIL_DIR}/acl_db_util.c)
 
 set (HEADERS ${OPS_CLS_INCLUDE_DIR}/ops-cls-asic-plugin.h)
 

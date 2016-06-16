@@ -75,17 +75,6 @@ const struct ovsrec_acl_entry *ovsrec_acl_cfg_aces_getvalue(const struct ovsrec_
 /**
  * Look up an ACE by key (sequence number) in ACE statistics
  *
- * @param  port_row        Port row pointer
- * @param  sequence_number ACE sequence number
- *
- * @return                 Hit count for ACE, 0 on failure
- */
-const int64_t ovsrec_port_aclv4_in_statistics_getvalue(const struct ovsrec_port *port_row,
-                                                       const int64_t key);
-
-/**
- * Look up an ACE by key (sequence number) in ACE statistics
- *
  * @param  vlan_row        VLAN row pointer
  * @param  sequence_number ACE sequence number
  *
@@ -151,11 +140,13 @@ void print_acl_tabular(const struct ovsrec_acl *acl_row,
                        const char *configuration);
 
 /**
- * Print inbound IPv4 statistics for any ACLs applied to a given Port
+ * Print inbound or outbound IPv4 statistics for any ACLs applied to a given Port
  *
+ * @param acl_db   Pointer to the @see acl_db_util structure
  * @param port_row Pointer to Port row
  */
-void print_port_aclv4_in_statistics(const struct ovsrec_port *port_row);
+void print_port_aclv4_statistics(const struct acl_db_util *acl_db,
+                                   const struct ovsrec_port *port_row);
 
 /**
  * Print inbound IPv4 statistics for any ACLs applied to a given VLAN

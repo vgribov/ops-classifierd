@@ -55,7 +55,7 @@ struct acl_port {
     struct port        *port;       /*< struct port */
     /* Hold all of my acl_port_map records internally, no need to
        allocate them separately. */
-    struct acl_port_map port_map[ACL_CFG_MAX_TYPES];
+    struct acl_port_map port_map[ACL_CFG_NUM_PORT_TYPES];
 
     const struct ovsrec_port *ovsdb_row;
     unsigned int       delete_seqno; /* mark/sweep to identify deleted */

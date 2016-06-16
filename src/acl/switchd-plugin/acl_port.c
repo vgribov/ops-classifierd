@@ -162,16 +162,16 @@ acl_port_map_set_cfg_status(struct acl_port_map *acl_port_map,
     char version[OPS_CLS_VERSION_STR_MAX_LEN];
 
     snprintf(version, OPS_CLS_VERSION_STR_MAX_LEN,
-             "%" PRId64"", row->aclv4_in_cfg_version[0]);
-    ovsrec_port_update_aclv4_in_status_setkey(row, OPS_CLS_STATUS_VERSION_STR,
-                                              version);
-    ovsrec_port_update_aclv4_in_status_setkey(row, OPS_CLS_STATUS_STATE_STR,
-                                              state);
+             "%" PRId64"", acl_db_util_get_cfg_version(acl_port_map->acl_db, row)[0]);
+    acl_db_util_status_setkey(acl_port_map->acl_db, row,
+                                OPS_CLS_STATUS_VERSION_STR, version);
+    acl_db_util_status_setkey(acl_port_map->acl_db, row,
+                                OPS_CLS_STATUS_STATE_STR, state);
     snprintf(code_str, OPS_CLS_CODE_STR_MAX_LEN, "%u", code);
-    ovsrec_port_update_aclv4_in_status_setkey(row, OPS_CLS_STATUS_CODE_STR,
-                                              code_str);
-    ovsrec_port_update_aclv4_in_status_setkey(row, OPS_CLS_STATUS_MSG_STR,
-                                              details);
+    acl_db_util_status_setkey(acl_port_map->acl_db, row,
+                                OPS_CLS_STATUS_CODE_STR, code_str);
+    acl_db_util_status_setkey(acl_port_map->acl_db, row,
+                                OPS_CLS_STATUS_MSG_STR, details);
 }
 
 /**************************************************************************//**
@@ -563,7 +563,8 @@ acl_port_map_stats_get(struct acl_port_map *acl_port_map,
         }
 
         /* Upload stats to ovsdb */
-        ovsrec_port_set_aclv4_in_statistics(acl_port_map->parent->ovsdb_row,
+        acl_db_util_set_statistics(acl_port_map->acl_db,
+                                            acl_port_map->parent->ovsdb_row,
                                             key_stats,val_stats,
                                             num_stat_entries);
 
@@ -648,12 +649,17 @@ acl_show_ports(struct unixctl_conn *conn, int argc, const char *argv[],
     struct acl_port *acl_port;
 
     SHASH_FOR_EACH_SAFE(node, next, &all_ports) {
+        int acl_type_iter;
         acl_port = (struct acl_port *)node->data;
         ds_put_format(&ds, "-----------------------------\n");
         ds_put_format(&ds, "Port name: %s\n", acl_port->port->name);
-        if (acl_port->port_map[ACL_CFG_V4_IN].hw_acl) {
-            ds_put_format(&ds, "Applied ACL name: %s\n",
-                acl_port->port_map[ACL_CFG_V4_IN].hw_acl->name);
+        for (acl_type_iter = ACL_CFG_MIN_PORT_TYPES;
+                acl_type_iter <= ACL_CFG_MAX_PORT_TYPES; ++acl_type_iter) {
+            if (acl_port->port_map[acl_type_iter].hw_acl) {
+                ds_put_format(&ds, "Applied ACL name (%s): %s\n",
+                    acl_db_accessor[acl_type_iter].direction_str,
+                    acl_port->port_map[acl_type_iter].hw_acl->name);
+            }
         }
     }
 
@@ -682,8 +688,10 @@ acl_port_new(struct port *port, unsigned int seqno,
     struct acl_port *acl_port = xzalloc(sizeof *acl_port);
 
     /* setup my port_map to know about me and which acl_port_map they represent */
-    for (int i = 0; i < ACL_CFG_MAX_TYPES; ++i) {
-        acl_port_map_construct(&acl_port->port_map[i], acl_port, i);
+    for (int acl_type_iter = ACL_CFG_MIN_PORT_TYPES;
+            acl_type_iter <= ACL_CFG_MAX_PORT_TYPES; ++acl_type_iter) {
+        acl_port_map_construct(&acl_port->port_map[acl_type_iter], acl_port,
+                acl_type_iter);
     }
 
     acl_port->port = port;
@@ -707,73 +715,12 @@ acl_port_delete(const char *port_name)
                                                          port_name);
 
     /* cleanup my port_map */
-    for (int i = 0; i < ACL_CFG_MAX_TYPES; ++i) {
-        acl_port_map_destruct(&port->port_map[i]);
+    for (int acl_type_iter = ACL_CFG_MIN_PORT_TYPES;
+            acl_type_iter <= ACL_CFG_MAX_PORT_TYPES; ++acl_type_iter) {
+        acl_port_map_destruct(&port->port_map[acl_type_iter]);
     }
 
     free(port);
-}
-
-/**************************************************************************//**
- * This function wraps @see acl_port_new() and @see acl_port_map_cfg_create()
- * functions. It is called when the port is seen first time in ACL feature
- * plugin
- *
- * @param[in] port         - Pointer to @see struct port
- * @param[in] seqno        - idl_seqno of the current idl batch
- * @param[in] ofproto      - Pointer to @see struct ofproto
- *
- * @returns Pointer to the newly created and configured acl_port
- *****************************************************************************/
-static struct acl_port*
-acl_port_cfg_create(struct port *port, unsigned int seqno,
-                    struct ofproto *ofproto, unsigned int interface_flags)
-{
-    VLOG_DBG("PORT %s created", port->cfg->name);
-    struct acl_port *acl_port = acl_port_new(port, seqno,
-                                             interface_flags);
-
-    for (int i = 0; i < ACL_CFG_MAX_TYPES; ++i) {
-        acl_port_map_cfg_create(&acl_port->port_map[i], port, ofproto);
-    }
-
-    return acl_port;
-}
-
-/**************************************************************************//**
- * This function wraps @see acl_port_map_cfg_update() function. It is called
- * when the port row is updated with new ACL value
- *
- * @param[in] acl_port     - Pointer to @see struct acl_port
- * @param[in] port         - Pointer to @see struct port
- * @param[in] ofproto      - Pointer to @see struct ofproto
- *****************************************************************************/
-static void
-acl_port_cfg_update(struct acl_port *acl_port, struct port *port,
-                    struct ofproto *ofproto)
-{
-    VLOG_DBG("PORT %s changed", acl_port->port->name);
-    for (int i = 0; i < ACL_CFG_MAX_TYPES; ++i) {
-        acl_port_map_cfg_update(&acl_port->port_map[i], port, ofproto);
-    }
-}
-
-/**************************************************************************//**
- * This function wraps @see acl_port_map_cfg_delete() function. It is called
- * when the port row is deleted.
- *
- * @param[in] acl_port     - Pointer to @see struct acl_port
- * @param[in] port         - Pointer to @see struct port
- * @param[in] ofproto      - Pointer to @see struct ofproto
- *****************************************************************************/
-static void
-acl_port_cfg_delete(struct acl_port* acl_port, struct port *port,
-                    struct ofproto *ofproto)
-{
-    VLOG_DBG("PORT %s deleted", port->name);
-    for (int i = 0; i < ACL_CFG_MAX_TYPES; ++i) {
-        acl_port_map_cfg_delete(&acl_port->port_map[i], port, ofproto);
-    }
 }
 
 void acl_callback_port_delete(struct blk_params *blk_params)
@@ -803,7 +750,13 @@ void acl_callback_port_delete(struct blk_params *blk_params)
         if (!shash_find_data(&br->wanted_ports, del_port->name)) {
             acl_port = acl_port_lookup(del_port->name);
             if (acl_port) {
-                acl_port_cfg_delete(acl_port, del_port, blk_params->ofproto);
+                for (int acl_type_iter = ACL_CFG_MIN_PORT_TYPES;
+                        acl_type_iter <= ACL_CFG_MAX_PORT_TYPES;
+                        ++acl_type_iter) {
+                    VLOG_DBG("PORT %s deleted", del_port->name);
+                    acl_port_map_cfg_delete(&acl_port->port_map[acl_type_iter],
+                                            del_port, blk_params->ofproto);
+                }
                 acl_port_delete(del_port->name);
             }
         }
@@ -842,16 +795,25 @@ void acl_callback_port_reconfigure(struct blk_params *blk_params)
         if (OVSREC_IDL_IS_ROW_MODIFIED(port->cfg, blk_params->idl_seqno)) {
             acl_port = acl_port_lookup(port->name);
             if (acl_port) {
-                if (port->cfg->aclv4_in_cfg) {
-                    /* Reconfigure ACL */
-                    acl_port->ovsdb_row = port->cfg;
-                    acl_port->delete_seqno = blk_params->idl_seqno;
-                    acl_port_cfg_update(acl_port, port, blk_params->ofproto);
-                } else {
-                    /* If the port row modification was unapply ACL, then
-                     * this case is hit.
-                     */
-                    acl_port_cfg_delete(acl_port, port, blk_params->ofproto);
+                for (int acl_type_iter = ACL_CFG_MIN_PORT_TYPES;
+                        acl_type_iter <= ACL_CFG_MAX_PORT_TYPES;
+                        ++acl_type_iter) {
+                    if (acl_db_util_get_cfg(&acl_db_accessor[acl_type_iter],
+                                            port->cfg)) {
+                        /* Reconfigure ACL */
+                        acl_port->ovsdb_row = port->cfg;
+                        acl_port->delete_seqno = blk_params->idl_seqno;
+                        VLOG_DBG("PORT %s changed", acl_port->port->name);
+                        acl_port_map_cfg_update(&acl_port->port_map[acl_type_iter],
+                                                port, blk_params->ofproto);
+                    } else {
+                        /* If the port row modification was unapply ACL, then
+                         * this case is hit.
+                         */
+                         VLOG_DBG("PORT %s deleted", port->name);
+                         acl_port_map_cfg_delete(&acl_port->port_map[acl_type_iter],
+                                                 port, blk_params->ofproto);
+                    }
                 }
             }
         }
@@ -866,21 +828,29 @@ acl_callback_port_update(struct blk_params *blk_params)
 
     VLOG_DBG("Port Update called for %s\n", blk_params->port->name);
 
-    if (blk_params->vrf) {
-        interface_flags |= OPS_CLS_INTERFACE_L3ONLY;
-    }
     acl_port = acl_port_lookup(blk_params->port->name);
+
     if (!acl_port) {
-        /* Create and apply if ACL is configured on the port.*/
-        if (blk_params->port->cfg->aclv4_in_cfg) {
-            acl_port_cfg_create(blk_params->port, blk_params->idl_seqno,
-                                blk_params->ofproto, interface_flags);
-        } else {
-            /* We still create a port entry. However, it will not be programmed
-             * until we have an ACL applied to it
-             */
-             acl_port_new(blk_params->port, blk_params->idl_seqno,
-                          interface_flags);
+        if (blk_params->vrf) {
+            interface_flags |= OPS_CLS_INTERFACE_L3ONLY;
+        }
+
+        /* Create on the port.*/
+        struct acl_port *acl_port = acl_port_new(blk_params->port,
+                                                 blk_params->idl_seqno,
+                                                 interface_flags);
+        VLOG_DBG("PORT %s created", blk_params->port->cfg->name);
+
+        /* Apply if ACL is configured on the port.*/
+        for (int acl_type_iter = ACL_CFG_MIN_PORT_TYPES;
+                acl_type_iter <= ACL_CFG_MAX_PORT_TYPES;
+                ++acl_type_iter) {
+            if (acl_db_util_get_cfg(&acl_db_accessor[acl_type_iter],
+                                    blk_params->port->cfg)) {
+                 acl_port_map_cfg_create(&acl_port->port_map[acl_type_iter],
+                                          blk_params->port,
+                                          blk_params->ofproto);
+            }
         }
     }
 }
@@ -906,8 +876,9 @@ acl_callback_port_stats_get(struct stats_blk_params *sblk,
         return;
     }
     /* Get statistics for this port if needed */
-    for (int i = 0; i < ACL_CFG_MAX_TYPES; i++) {
-        acl_port_map_stats_get(&acl_port->port_map[i], br->ofproto);
+    for (int acl_type_iter = ACL_CFG_MIN_PORT_TYPES;
+            acl_type_iter <= ACL_CFG_MAX_PORT_TYPES; ++acl_type_iter) {
+        acl_port_map_stats_get(&acl_port->port_map[acl_type_iter], br->ofproto);
     }
 }
 

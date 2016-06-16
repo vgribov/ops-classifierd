@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "acl_db_util.h"
 #include "acl_parse.h"
 #include "openvswitch/vlog.h"
 
@@ -284,10 +285,10 @@ acl_entry_config_to_string(const int64_t sequence_num,
 /**
  * Look up an ACE by key (sequence number) in ACE statistics
  *
- * @param  port_row        Port row pointer
- * @param  sequence_number ACE sequence number
+ * @param  port_row   Port row pointer
+ * @param  key        key to the current ACE column
  *
- * @return                 Hit count for ACE, 0 on failure
+ * @return            Hit count for ACE, 0 on failure
  *
  * @todo This could/should be generated as part of IDL.
  */
@@ -295,10 +296,29 @@ const int64_t
 ovsrec_port_aclv4_in_statistics_getvalue(const struct ovsrec_port *port_row,
                                          const int64_t key)
 {
-    int i;
-    for (i = 0; i < port_row->n_aclv4_in_statistics; i ++) {
-        if (port_row->key_aclv4_in_statistics[i] == key) {
-            return port_row->value_aclv4_in_statistics[i];
+    return ovsrec_port_aclv4_statistics_getvalue(acl_db_util_accessor_get(OPS_CLS_ACL_V4, OPS_CLS_DIRECTION_IN, OPS_CLS_INTERFACE_PORT), port_row, key);
+}
+
+/**
+ * Look up an ACE by key (sequence number) in ACE statistics
+ *
+ * @param  acl_db     Pointer to the @see acl_db_util structure
+ * @param  port_row   Port row pointer
+ * @param  key        key to the current ACE column
+ *
+ * @return            Hit count for ACE, 0 on failure
+ *
+ * @todo This could/should be generated as part of IDL.
+ */
+const int64_t
+ovsrec_port_aclv4_statistics_getvalue(const struct acl_db_util *acl_db,
+                                        const struct ovsrec_port *port_row,
+                                        const int64_t key)
+{
+    int acl_type_iter;
+    for (acl_type_iter = 0; acl_type_iter < acl_db_util_get_n_statistics(acl_db, port_row); acl_type_iter++) {
+        if (acl_db_util_get_key_statistics(acl_db, port_row)[acl_type_iter] == key) {
+            return acl_db_util_get_value_statistics(acl_db, port_row)[acl_type_iter];
         }
     }
     return 0;

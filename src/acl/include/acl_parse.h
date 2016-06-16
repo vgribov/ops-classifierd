@@ -33,6 +33,9 @@
 #define ACL_LOG_TIMER_MAX "300"
 #define ACL_LOG_TIMER_DEFAULT ACL_LOG_TIMER_MAX
 
+/* Forward declaration - structure defined in acl_db_util.h */
+struct acl_db_util;
+
 /**
  * Determine if a string is numeric or not
  *
@@ -122,14 +125,16 @@ char *acl_entry_config_to_string(const int64_t sequence_num,
 /**
  * Look up an ACE by key (sequence number) in ACE statistics
  *
- * @param  port_row        Port row pointer
- * @param  sequence_number ACE sequence number
+ * @param  acl_db     Pointer to the @see acl_db_util structure
+ * @param  port_row   Port row pointer
+ * @param  key        key to the current ACE column
  *
- * @return                 Hit count for ACE, 0 on failure
+ * @return            Hit count for ACE, 0 on failure
  *
  * @todo This could/should be generated as part of IDL.
  */
-const int64_t ovsrec_port_aclv4_in_statistics_getvalue(
-                                            const struct ovsrec_port *port_row,
-                                            const int64_t key);
+const int64_t
+ovsrec_port_aclv4_statistics_getvalue(const struct acl_db_util *acl_db,
+                                        const struct ovsrec_port *port_row,
+                                        const int64_t key);
 #endif  /* __OPS_CLS_ACL_PARSE_H__ */

@@ -38,6 +38,7 @@
 #include <vty_utils.h>
 
 #include <acl_parse.h>
+#include <acl_db_util.h>
 #include <ops-cls-asic-plugin.h>
 #include <ops_cls_status_msgs.h>
 
@@ -309,36 +310,38 @@ print_acl_tabular(const struct ovsrec_acl *acl_row,
 }
 
 void
-print_port_aclv4_in_statistics(const struct ovsrec_port *port_row)
+print_port_aclv4_statistics(const struct acl_db_util *acl_db,
+                              const struct ovsrec_port *port_row)
 {
     int64_t hit_count;
     char *ace_str;
     int i;
+    const struct ovsrec_acl* acl_applied = acl_db_util_get_applied(acl_db, port_row);
 
-    vty_out(vty, "Interface %s (in):%s", port_row->name, VTY_NEWLINE);
+    vty_out(vty, "Interface %s (%s):%s", port_row->name, acl_db->direction_str, VTY_NEWLINE);
     vty_out(vty, "%20s  %s%s", "Hit Count", "Configuration", VTY_NEWLINE);
 
     /* Print each ACL entry as a single line (ala CLI input) */
-    for (i = 0; i < port_row->aclv4_in_applied->n_cur_aces; i ++) {
+    for (i = 0; i < acl_applied->n_cur_aces; i++) {
         /* If entry has or is a comment, print as its own line */
-        if (port_row->aclv4_in_applied->value_cur_aces[i]->comment) {
+        if (acl_applied->value_cur_aces[i]->comment) {
             vty_out(vty,
                     "%20s  %" PRId64 " comment %s%s",
                     "",
-                    port_row->aclv4_in_applied->key_cur_aces[i],
-                    port_row->aclv4_in_applied->value_cur_aces[i]->comment,
+                    acl_applied->key_cur_aces[i],
+                    acl_applied->value_cur_aces[i]->comment,
                     VTY_NEWLINE);
         }
-        if (port_row->aclv4_in_applied->value_cur_aces[i]->action) {
-            if (port_row->aclv4_in_applied->value_cur_aces[i]->n_count) {
-                hit_count = ovsrec_port_aclv4_in_statistics_getvalue(
-                                    port_row, port_row->aclv4_in_applied->key_cur_aces[i]);
+        if (acl_applied->value_cur_aces[i]->action) {
+            if (acl_applied->value_cur_aces[i]->n_count) {
+                hit_count = ovsrec_port_aclv4_statistics_getvalue(acl_db, port_row,
+                              acl_applied->key_cur_aces[i]);
                 vty_out(vty, "%20" PRId64, hit_count);
             } else {
                 vty_out(vty, "%20s", "-");
             }
-            ace_str = acl_entry_config_to_string(port_row->aclv4_in_applied->key_cur_aces[i],
-                                                 port_row->aclv4_in_applied->value_cur_aces[i]);
+            ace_str = acl_entry_config_to_string(acl_applied->key_cur_aces[i],
+                                                 acl_applied->value_cur_aces[i]);
             vty_out(vty, "  %s%s", ace_str, VTY_NEWLINE);
             free(ace_str);
         }

@@ -32,6 +32,7 @@
 #include <linux/mpls.h>
 #include <linux/llc.h>
 
+#include "acl_db_util.h"
 #include "acl_log.h"
 #include "acl_parse.h"
 #include "acl_port.h"
@@ -860,7 +861,7 @@ acl_log_get_entry_index(struct acl *acl, struct pkt_info *key, uint8_t *in_cos,
 
     for (i = 0; i < acl->ovsdb_row->n_cur_aces; i++) {
         if (acl_log_entry_match(
-                    &acl->cfg_pi[ACL_CFG_V4_IN].entries[i].entry_fields,
+                    &acl->cfg_pi[ACL_CFG_PORT_V4_IN].entries[i].entry_fields,
                     key, in_cos)) {
             *index = i;
             return true;
@@ -923,37 +924,41 @@ acl_log_stats_add_stat(struct ace_stats_cont_s *cont, struct ace_stat_s *stat)
  */
 static void
 acl_log_get_single_stat(struct ace_stat_s *stat,
-        const struct ovsrec_port *port_row, int index)
+        const struct acl_db_util *acl_db,
+        const struct ovsrec_port *port_row,
+        const struct ovsrec_acl *acl_row,
+        int index)
 {
     stat->hnode.hash = 0;
     stat->hnode.next = NULL;
 
     /* get the uuid of the ACE */
     memcpy(&stat->uuid,
-            &port_row->aclv4_in_applied->value_cur_aces[index]->header_.uuid,
+            &acl_row->value_cur_aces[index]->header_.uuid,
             sizeof(struct uuid));
 
     /* read the hit count from the db */
-    stat->hit_count = ovsrec_port_aclv4_in_statistics_getvalue(
-                port_row, port_row->aclv4_in_applied->key_cur_aces[index]);
+    stat->hit_count = ovsrec_port_aclv4_statistics_getvalue(acl_db, port_row,
+                                        acl_row->key_cur_aces[index]);
 }
 
-/* This function records the baseline statistics for the aclv4 applied to a
+/* This function records the baseline statistics for an acl applied to a
  * single port.
  */
 static void
-acl_log_port_aclv4_in_baseline_stats(const struct ovsrec_port *port_row,
-                                     const char* list_name)
+acl_log_port_aclv4_baseline_stats(const struct acl_db_util *acl_db,
+                                  const struct ovsrec_port *port_row,
+                                  const struct ovsrec_acl *acl_row)
 {
     int i;
 
-    for (i = 0; i < port_row->aclv4_in_applied->n_cur_aces; i ++) {
-        if ((port_row->aclv4_in_applied->value_cur_aces[i]->action) &&
-                (port_row->aclv4_in_applied->value_cur_aces[i]->n_count) &&
-                (port_row->aclv4_in_applied->value_cur_aces[i]->n_log)) {
+    for (i = 0; i < acl_row->n_cur_aces; i ++) {
+        if ((acl_row->value_cur_aces[i]->action) &&
+                (acl_row->value_cur_aces[i]->n_count) &&
+                (acl_row->value_cur_aces[i]->n_log)) {
             struct ace_stat_s stat;
 
-            acl_log_get_single_stat(&stat, port_row, i);
+            acl_log_get_single_stat(&stat, acl_db, port_row, acl_row, i);
 
             /* add the stat to prev_stats */
             acl_log_stats_add_stat(&baseline_stats, &stat);
@@ -982,9 +987,15 @@ acl_log_get_baseline_stats()
 
     /* record the statistics for each configured ACL */
     OVSREC_PORT_FOR_EACH(port_row, idl) {
-        if (port_row->aclv4_in_applied) {
-            acl_log_port_aclv4_in_baseline_stats(port_row,
-                                                 port_row->aclv4_in_applied->name);
+        int acl_type_iter;
+        for (acl_type_iter = ACL_CFG_MIN_PORT_TYPES;
+                acl_type_iter <= ACL_CFG_MAX_PORT_TYPES; acl_type_iter++) {
+            const struct ovsrec_acl *acl_row_applied =
+                acl_db_util_get_applied(&acl_db_accessor[acl_type_iter], port_row);
+            if (acl_row_applied) {
+                acl_log_port_aclv4_baseline_stats(&acl_db_accessor[acl_type_iter],
+                        port_row, acl_row_applied);
+            }
         }
     }
 }
@@ -994,22 +1005,23 @@ acl_log_get_baseline_stats()
  * between them in a formatted log output.
  */
 static void
-acl_log_port_aclv4_in_statistics(const struct ovsrec_port *port_row,
-                                 const char* list_name)
+acl_log_port_aclv4_statistics(const struct acl_db_util *acl_db,
+                                const struct ovsrec_port *port_row,
+                                const struct ovsrec_acl *acl_row)
 {
     char *ace_str;
     int i;
 
     /* Print each ACL entry as a single line (ala CLI input) */
-    for (i = 0; i < port_row->aclv4_in_applied->n_cur_aces; i ++) {
-        if ((port_row->aclv4_in_applied->value_cur_aces[i]->action) &&
-                (port_row->aclv4_in_applied->value_cur_aces[i]->n_count) &&
-                (port_row->aclv4_in_applied->value_cur_aces[i]->n_log)) {
+    for (i = 0; i < acl_row->n_cur_aces; i ++) {
+        if ((acl_row->value_cur_aces[i]->action) &&
+                (acl_row->value_cur_aces[i]->n_count) &&
+                (acl_row->value_cur_aces[i]->n_log)) {
             struct ace_stat_s stat;
             struct ace_stat_s *prev_stat;
             int64_t hit_delta;
 
-            acl_log_get_single_stat(&stat, port_row, i);
+            acl_log_get_single_stat(&stat, acl_db, port_row, acl_row, i);
 
             hit_delta = stat.hit_count;
 
@@ -1023,10 +1035,11 @@ acl_log_port_aclv4_in_statistics(const struct ovsrec_port *port_row,
 
             /* print the entry */
             ace_str = acl_entry_config_to_string(
-                        port_row->aclv4_in_applied->key_cur_aces[i],
-                        port_row->aclv4_in_applied->value_cur_aces[i]);
-            VLOG_INFO("%s on %s (in): %12" PRId64 "  %s",
-                    list_name, port_row->name, hit_delta, ace_str);
+                        acl_row->key_cur_aces[i],
+                        acl_row->value_cur_aces[i]);
+            VLOG_INFO("%s on %s (%s): %12" PRId64 "  %s",
+                    acl_row->name, port_row->name, acl_db->direction_str,
+                    hit_delta, ace_str);
             free(ace_str);
         }
     }
@@ -1067,9 +1080,15 @@ acl_log_get_stats()
 
     /* print and record the statistics for each configured ACL */
     OVSREC_PORT_FOR_EACH(port_row, idl) {
-        if (port_row->aclv4_in_applied) {
-            acl_log_port_aclv4_in_statistics(port_row,
-                                             port_row->aclv4_in_applied->name);
+        int acl_type_iter;
+        for (acl_type_iter = ACL_CFG_MIN_PORT_TYPES;
+                acl_type_iter <= ACL_CFG_MAX_PORT_TYPES; acl_type_iter++) {
+            const struct ovsrec_acl *acl_row_applied =
+                acl_db_util_get_applied(&acl_db_accessor[acl_type_iter], port_row);
+            if (acl_row_applied) {
+                acl_log_port_aclv4_statistics(&acl_db_accessor[acl_type_iter],
+                        port_row, acl_row_applied);
+            }
         }
     }
 
@@ -1146,7 +1165,12 @@ acl_log_run(struct run_blk_params *blk_params)
         if (ACL_LOG_INGRESS_PORT & pkt_buff.pkt_info.valid_fields) {
             acl_port = acl_port_lookup(pkt_buff.pkt_info.ingress_port_name);
             if (acl_port) {
-                acl = acl_port->port_map[ACL_CFG_V4_IN].hw_acl;
+                acl = acl_port->port_map[ACL_CFG_PORT_V4_IN].hw_acl;
+            }
+        } else if (ACL_LOG_EGRESS_PORT & pkt_buff.pkt_info.valid_fields) {
+            acl_port = acl_port_lookup(pkt_buff.pkt_info.egress_port_name);
+            if (acl_port) {
+                acl = acl_port->port_map[ACL_CFG_PORT_V4_OUT].hw_acl;
             }
         }
 
@@ -1225,12 +1249,16 @@ acl_log_run(struct run_blk_params *blk_params)
             }
             if (ACL_LOG_INGRESS_PORT & pkt_buff.pkt_info.valid_fields) {
                 ds_put_format(&msg, "port %s, ", pkt_buff.pkt_info.ingress_port_name);
+            } else if (ACL_LOG_EGRESS_PORT & pkt_buff.pkt_info.valid_fields) {
+                ds_put_format(&msg, "port %s, ", pkt_buff.pkt_info.egress_port_name);
             }
         }
 
-        /* Note: currently only ingress ACLs are supported. This code will
-         * have to be updated when egress ACLs are also supported. */
-        ds_put_format(&msg, "direction %s", "in");
+        if (ACL_LOG_INGRESS_PORT & pkt_buff.pkt_info.valid_fields) {
+            ds_put_format(&msg, "direction %s", "in");
+        } else if (ACL_LOG_EGRESS_PORT & pkt_buff.pkt_info.valid_fields) {
+            ds_put_format(&msg, "direction %s", "out");
+        }
 
         VLOG_INFO("%s", ds_cstr_ro(&msg));
         ds_destroy(&msg);

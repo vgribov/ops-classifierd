@@ -646,16 +646,21 @@ cli_print_acls (const char *interface_type,
             print_acl_commands(acl_row, configuration);
 
             OVSREC_PORT_FOR_EACH(port_row, idl) {
-                if (!configuration && port_row->aclv4_in_applied == acl_row) {
-                    if (port_row->aclv4_in_applied != port_row->aclv4_in_cfg) {
-                        print_acl_mismatch_warning(acl_row->name, commands);
+                int acl_type_iter;
+                for (acl_type_iter = ACL_CFG_MIN_PORT_TYPES; acl_type_iter <= ACL_CFG_MAX_PORT_TYPES; acl_type_iter++) {
+                    if (!configuration && acl_db_util_get_applied(&acl_db_accessor[acl_type_iter], port_row) == acl_row) {
+                        if (!aces_cur_cfg_equal(acl_db_util_get_applied(&acl_db_accessor[acl_type_iter], port_row))) {
+                            print_acl_mismatch_warning(acl_row->name, commands);
+                        }
+                        print_acl_apply_commands("interface", port_row->name, acl_db_accessor[acl_type_iter].direction_str,
+                                acl_db_util_get_applied(&acl_db_accessor[acl_type_iter], port_row));
+                    } else if (acl_db_util_get_cfg(&acl_db_accessor[acl_type_iter], port_row) == acl_row) {
+                        if (!aces_cur_cfg_equal(acl_db_util_get_cfg(&acl_db_accessor[acl_type_iter], port_row))) {
+                            print_acl_mismatch_warning(acl_row->name, commands);
+                        }
+                        print_acl_apply_commands("interface", port_row->name, acl_db_accessor[acl_type_iter].direction_str,
+                                acl_db_util_get_cfg(&acl_db_accessor[acl_type_iter], port_row));
                     }
-                    print_acl_apply_commands("interface", port_row->name, "in", port_row->aclv4_in_applied);
-                } else if (configuration && port_row->aclv4_in_cfg == acl_row) {
-                    if (port_row->aclv4_in_applied != port_row->aclv4_in_cfg) {
-                        print_acl_mismatch_warning(acl_row->name, commands);
-                    }
-                    print_acl_apply_commands("interface", port_row->name, "in", port_row->aclv4_in_cfg);
                 }
             }
 
@@ -677,38 +682,52 @@ cli_print_acls (const char *interface_type,
 
     /* Print all ACLs applied to specified Port ("interface" in the CLI) */
     } else if (interface_type && !strcmp(interface_type, "interface")) {
+        int acl_type_iter;
         port_row = get_port_by_name(interface_id);
+
         if (!port_row) {
             vty_out(vty, "%% Port does not exist%s", VTY_NEWLINE);
             return CMD_ERR_NOTHING_TODO;
         }
-        /* Print applied ACL unless user specified "configuration" */
-        if (!configuration) {
-            acl_row = port_row->aclv4_in_applied;
-        } else {
-            acl_row = port_row->aclv4_in_cfg;
-        }
-        if (acl_row) {
-            /* Print tabular */
-            if (!commands) {
-                if (!aces_cur_cfg_equal(acl_row)) {
-                    print_acl_mismatch_warning(acl_row->name, commands);
-                }
-                vty_out(vty, "%-10s %-31s%s", "Direction", "", VTY_NEWLINE);
-                print_acl_tabular_header();
-                print_acl_horizontal_rule();
-                vty_out(vty, "%-10s %-31s%s", "Inbound", "", VTY_NEWLINE);
-                print_acl_tabular(acl_row, configuration);
-                print_acl_horizontal_rule();
-            /* Print commands (including apply statements) */
-            } else {
-                if (!aces_cur_cfg_equal(acl_row)) {
-                    print_acl_mismatch_warning(acl_row->name, commands);
-                }
-                print_acl_commands(acl_row, configuration);
 
-                if (port_row->aclv4_in_applied != port_row->aclv4_in_cfg) {
-                    print_acl_mismatch_warning(acl_row->name, commands);
+        for (acl_type_iter = ACL_CFG_MIN_PORT_TYPES; acl_type_iter <= ACL_CFG_MAX_PORT_TYPES; acl_type_iter++) {
+            if (direction == NULL || !strcmp(direction, acl_db_accessor[acl_type_iter].direction_str)) {
+                /* Print applied ACL unless user specified "configuration" */
+                if (!configuration) {
+                    acl_row = acl_db_util_get_applied(&acl_db_accessor[acl_type_iter], port_row);
+                } else {
+                    acl_row = acl_db_util_get_cfg(&acl_db_accessor[acl_type_iter], port_row);
+                }
+                if (acl_row) {
+                    /* Print tabular */
+                    if (!commands) {
+                        if (!aces_cur_cfg_equal(acl_row)) {
+                            print_acl_mismatch_warning(acl_row->name, commands);
+                        }
+                        vty_out(vty, "%-10s %-31s%s", "Direction", "", VTY_NEWLINE);
+                        print_acl_tabular_header();
+                        print_acl_horizontal_rule();
+                        switch (acl_db_accessor[acl_type_iter].direction) {
+                            case OPS_CLS_DIRECTION_IN :
+                                vty_out(vty, "%-10s %-31s%s", "Inbound", "", VTY_NEWLINE);
+                                break;
+                            case OPS_CLS_DIRECTION_OUT :
+                                vty_out(vty, "%-10s %-31s%s", "Outbound", "", VTY_NEWLINE);
+                                break;
+                            default :
+                                vty_out(vty, "%-10s %-31s%s", "Unknown", "", VTY_NEWLINE);
+                        }
+                        print_acl_tabular(acl_row, configuration);
+                        print_acl_horizontal_rule();
+                    /* Print commands (including apply statements) */
+                    } else {
+                        if (!aces_cur_cfg_equal(acl_row)) {
+                            print_acl_mismatch_warning(acl_row->name, commands);
+                        }
+                        print_acl_commands(acl_row, configuration);
+                        print_acl_apply_commands(interface_type, interface_id,
+                                                 acl_db_accessor[acl_type_iter].direction_str, acl_row);
+                    }
                 }
                 print_acl_apply_commands(interface_type, interface_id, "in", acl_row);
             }
@@ -767,6 +786,8 @@ cli_print_acls (const char *interface_type,
                 }
                 print_acl_horizontal_rule();
             } else {
+                int acl_type_iter;
+
                 OVSREC_ACL_FOR_EACH(acl_row, idl) {
                     if (!aces_cur_cfg_equal(acl_row)) {
                         print_acl_mismatch_warning(acl_row->name, commands);
@@ -774,16 +795,28 @@ cli_print_acls (const char *interface_type,
                     print_acl_commands(acl_row, configuration);
                 }
                 OVSREC_PORT_FOR_EACH(port_row, idl) {
-                    if (!configuration && port_row->aclv4_in_applied) {
-                        if (port_row->aclv4_in_applied != port_row->aclv4_in_cfg) {
-                            print_acl_mismatch_warning(port_row->aclv4_in_applied->name, commands);
+                    for (acl_type_iter = ACL_CFG_MIN_PORT_TYPES;
+                            acl_type_iter <= ACL_CFG_MAX_PORT_TYPES; acl_type_iter++) {
+                        if (direction == NULL || !strcmp(direction, acl_db_accessor[acl_type_iter].direction_str)) {
+                            const struct ovsrec_acl* cur_applied =
+                                        acl_db_util_get_applied(&acl_db_accessor[acl_type_iter], port_row);
+                            const struct ovsrec_acl* cur_cfg =
+                                        acl_db_util_get_cfg(&acl_db_accessor[acl_type_iter], port_row);
+
+                            if (!configuration && cur_applied) {
+                                if (!aces_cur_cfg_equal(cur_applied)) {
+                                    print_acl_mismatch_warning(cur_applied->name, commands);
+                                }
+                                print_acl_apply_commands("interface", port_row->name,
+                                                         acl_db_accessor[acl_type_iter].direction_str, cur_applied);
+                            } else if (configuration && cur_cfg) {
+                                if (!aces_cur_cfg_equal(acl_db_util_get_cfg(&acl_db_accessor[acl_type_iter], port_row))) {
+                                    print_acl_mismatch_warning(cur_cfg->name, commands);
+                                }
+                                print_acl_apply_commands("interface", port_row->name,
+                                                         acl_db_accessor[acl_type_iter].direction_str, cur_cfg);
+                            }
                         }
-                        print_acl_apply_commands("interface", port_row->name, "in", port_row->aclv4_in_applied);
-                    } else if (configuration && port_row->aclv4_in_cfg) {
-                        if (port_row->aclv4_in_applied != port_row->aclv4_in_cfg) {
-                            print_acl_mismatch_warning(port_row->aclv4_in_cfg->name, commands);
-                        }
-                        print_acl_apply_commands("interface", port_row->name, "in", port_row->aclv4_in_cfg);
                     }
                 }
                 OVSREC_VLAN_FOR_EACH(vlan_row, idl) {
@@ -922,21 +955,24 @@ cli_apply_acl (const char *interface_type,
             return CMD_ERR_NOTHING_TODO;
         }
 
-        if (!strcmp(acl_type, "ipv4") && !strcmp(direction, "in")) {
+        if (!strcmp(acl_type, "ipv4") && (!strcmp(direction, "in") || !strcmp(direction, "out"))) {
+            enum ops_cls_direction dir = !strcmp(direction, "in") ? OPS_CLS_DIRECTION_IN : OPS_CLS_DIRECTION_OUT;
+            struct acl_db_util *db_acc = acl_db_util_accessor_get(OPS_CLS_ACL_V4, dir, OPS_CLS_INTERFACE_PORT);
+
             /* Check if we're replacing an already-configured ACL */
-            if (port_row->aclv4_in_cfg) {
+            if (acl_db_util_get_cfg(db_acc, port_row)) {
                 VLOG_DBG("Old ACL application port=%s acl_name=%s",
-                         interface_id, port_row->aclv4_in_cfg->name);
+                         interface_id, acl_db_util_get_cfg(db_acc, port_row)->name);
             }
             /* Configure the requested ACL for the Port */
             VLOG_DBG("New ACL application port=%s acl_name=%s", interface_id, acl_name);
-            ovsrec_port_set_aclv4_in_cfg(port_row, acl_row);
-            if (port_row->n_aclv4_in_cfg_version) {
-                pending_cfg_version = port_row->aclv4_in_cfg_version[0] + 1;
+            acl_db_util_set_cfg(db_acc, port_row, acl_row);
+            if (acl_db_util_get_n_cfg_version(db_acc, port_row)) {
+                pending_cfg_version = acl_db_util_get_cfg_version(db_acc, port_row)[0] + 1;
             } else {
                 pending_cfg_version = 0;
             }
-            ovsrec_port_set_aclv4_in_cfg_version(port_row, &pending_cfg_version, 1);
+            acl_db_util_set_cfg_version(db_acc, port_row, &pending_cfg_version);
         } else {
             vty_out(vty, "%% Unsupported ACL type or direction%s", VTY_NEWLINE);
             cli_do_config_abort(transaction);
@@ -1027,9 +1063,11 @@ cli_unapply_acl (const char *interface_type,
             return CMD_ERR_NOTHING_TODO;
         }
 
-        if (!strcmp(acl_type, "ipv4") && !strcmp(direction, "in")) {
+        if (!strcmp(acl_type, "ipv4") && direction && (!strcmp(direction, "in") || !strcmp(direction, "out"))) {
+            enum ops_cls_direction dir = !strcmp(direction, "in") ? OPS_CLS_DIRECTION_IN : OPS_CLS_DIRECTION_OUT;
+            struct acl_db_util *db_acc = acl_db_util_accessor_get(OPS_CLS_ACL_V4, dir, OPS_CLS_INTERFACE_PORT);
             /* Check that an ACL is currently configured for the port */
-            if (!port_row->aclv4_in_cfg) {
+            if (!acl_db_util_get_cfg(db_acc, port_row)) {
                 vty_out(vty, "%% No ACL is configured for port %s%s",
                         port_row->name, VTY_NEWLINE);
                 cli_do_config_abort(transaction);
@@ -1037,9 +1075,9 @@ cli_unapply_acl (const char *interface_type,
             }
 
             /* Check that the ACL to remove is the one configured for the port */
-            if (strcmp(acl_name, port_row->aclv4_in_cfg->name)) {
+            if (strcmp(acl_name, acl_db_util_get_cfg(db_acc, port_row)->name)) {
                 vty_out(vty, "%% ACL %s is applied to port %s, not %s%s",
-                        port_row->aclv4_in_cfg->name,
+                        acl_db_util_get_cfg(db_acc, port_row)->name,
                         port_row->name, acl_name, VTY_NEWLINE);
                 cli_do_config_abort(transaction);
                 return CMD_ERR_NOTHING_TODO;
@@ -1047,13 +1085,13 @@ cli_unapply_acl (const char *interface_type,
 
             /* Un-configure the requested ACL from the Port */
             VLOG_DBG("Removing ACL apply port=%s acl_name=%s", interface_id, acl_name);
-            ovsrec_port_set_aclv4_in_cfg(port_row, NULL);
-            if (port_row->n_aclv4_in_cfg_version) {
-                pending_cfg_version = port_row->aclv4_in_cfg_version[0] + 1;
+            acl_db_util_set_cfg(db_acc, port_row, NULL);
+            if (acl_db_util_get_n_cfg_version(db_acc, port_row)) {
+                pending_cfg_version = acl_db_util_get_cfg_version(db_acc, port_row)[0] + 1;
             } else {
                 pending_cfg_version = 0;
             }
-            ovsrec_port_set_aclv4_in_cfg_version(port_row, &pending_cfg_version, 1);
+            acl_db_util_set_cfg_version(db_acc, port_row, &pending_cfg_version);
         } else {
             vty_out(vty, "%% Unsupported ACL type or direction%s", VTY_NEWLINE);
             cli_do_config_abort(transaction);
@@ -1138,9 +1176,16 @@ cli_print_acl_statistics (const char *acl_type,
     /* No interface specified (implicit "all" interface type/id/direction) */
     if (!interface_type) {
         vty_out(vty, "Statistics for ACL %s (%s):%s", acl_row->name, acl_row->list_type, VTY_NEWLINE);
+        assert(direction == NULL);
+
         OVSREC_PORT_FOR_EACH(port_row, idl) {
-            if (port_row->aclv4_in_applied && (port_row->aclv4_in_applied == acl_row)) {
-                print_port_aclv4_in_statistics(port_row);
+            int acl_type_iter;
+            for (acl_type_iter = ACL_CFG_MIN_PORT_TYPES; acl_type_iter <= ACL_CFG_MAX_PORT_TYPES; acl_type_iter++) {
+                const struct ovsrec_acl *cur_acl_row_applied =
+                    acl_db_util_get_applied(&acl_db_accessor[acl_type_iter], port_row);
+                if (cur_acl_row_applied && (cur_acl_row_applied == acl_row)) {
+                    print_port_aclv4_statistics(&acl_db_accessor[acl_type_iter], port_row);
+                }
             }
         }
         OVSREC_VLAN_FOR_EACH(vlan_row, idl) {
@@ -1150,16 +1195,32 @@ cli_print_acl_statistics (const char *acl_type,
         }
     /* Port (unfortunately called "interface" in the CLI) */
     } else if (interface_type && !strcmp(interface_type, "interface")) {
+        int acl_type_iter;
+        bool applied = false;
+
         /* Get Port row */
         port_row = get_port_by_name(interface_id);
         if (!port_row) {
             vty_out(vty, "%% Port %s does not exist%s", interface_id, VTY_NEWLINE);
             return CMD_ERR_NOTHING_TODO;
         }
-        if (port_row->aclv4_in_applied && (port_row->aclv4_in_applied == acl_row)) {
-            vty_out(vty, "Statistics for ACL %s (%s):%s", acl_row->name, acl_row->list_type, VTY_NEWLINE);
-            print_port_aclv4_in_statistics(port_row);
-        } else {
+
+        for (acl_type_iter = ACL_CFG_MIN_PORT_TYPES; acl_type_iter <= ACL_CFG_MAX_PORT_TYPES; acl_type_iter++) {
+            if((direction == NULL) || !strcmp(direction, acl_db_accessor[acl_type_iter].direction_str)) {
+                const struct ovsrec_acl *cur_acl_row_applied = acl_db_util_get_applied(&acl_db_accessor[acl_type_iter], port_row);
+                if (cur_acl_row_applied && (cur_acl_row_applied == acl_row)) {
+
+                    /* Print the title only once on the first applied acl that is found */
+                    if(applied == false) {
+                        vty_out(vty, "Statistics for ACL %s (%s):%s", acl_row->name, acl_row->list_type, VTY_NEWLINE);
+                        applied = true;
+                    }
+
+                    print_port_aclv4_statistics(&acl_db_accessor[acl_type_iter], port_row);
+                }
+            }
+        }
+        if (applied == false) {
             vty_out(vty, "%% Specified ACL not applied to interface%s", VTY_NEWLINE);
             return CMD_ERR_NOTHING_TODO;
         }
@@ -1195,7 +1256,6 @@ cli_clear_acl_statistics (const char *acl_type,
     const struct ovsrec_vlan *vlan_row;
     const struct ovsrec_acl *acl_row;
     int64_t clear_stats_req_id;
-    struct acl_db_util *acl_db_util;
 
     VLOG_DBG("Clearing statistics for %s ACL %s %s=%s direction=%s",
             acl_type, acl_name, interface_type, interface_id, direction);
@@ -1207,27 +1267,22 @@ cli_clear_acl_statistics (const char *acl_type,
         return CMD_OVSDB_FAILURE;
     }
 
-    /* retrieve acl_db_accessor */
-    acl_db_util = acl_db_util_accessor_get(OPS_CLS_ACL_V4, OPS_CLS_DIRECTION_IN);
-    if (!acl_db_util) {
-        VLOG_ERR("Unable to acquire acl_db_util accessor");
-        cli_do_config_abort(transaction);
-        return CMD_OVSDB_FAILURE;
-    }
-    /* No ACL specified (implicit "all" applied ACLs) */
+    /* Clear all hitcounts */
     if (!acl_name) {
         OVSREC_PORT_FOR_EACH(port_row, idl) {
+            int acl_type_iter;
+            for (acl_type_iter = ACL_CFG_MIN_PORT_TYPES; acl_type_iter <= ACL_CFG_MAX_PORT_TYPES; acl_type_iter++) {
+                if (acl_db_util_get_applied(&acl_db_accessor[acl_type_iter], port_row)) {
+                    VLOG_DBG("Clearing ACL statistics port=%s", port_row->name);
+                    /* retrieve current clear requested id and increment by 1 for
+                     * this clear request
+                     */
+                    clear_stats_req_id = acl_db_util_get_clear_statistics_requested(
+                                            &acl_db_accessor[acl_type_iter], port_row) + 1;
 
-            if (port_row->aclv4_in_applied) {
-                VLOG_DBG("Clearing ACL statistics port=%s", port_row->name);
-                /* retrieve current clear requested id and increment by 1 for
-                 * this clear request
-                 */
-                clear_stats_req_id = acl_db_util_get_clear_statistics_requested(
-                                        acl_db_util, port_row) + 1;
-
-                acl_db_util_set_clear_statistics_requested(acl_db_util,
-                                        port_row, clear_stats_req_id);
+                    acl_db_util_set_clear_statistics_requested(&acl_db_accessor[acl_type_iter],
+                                            port_row, clear_stats_req_id);
+                }
             }
         }
 
@@ -1243,30 +1298,8 @@ cli_clear_acl_statistics (const char *acl_type,
             cli_do_config_abort(transaction);
             return CMD_ERR_NOTHING_TODO;
         }
-        /* No interface specified (implicit "all" interface type/id/direction) */
-        if (!interface_type) {
-            OVSREC_PORT_FOR_EACH(port_row, idl) {
-                if (port_row->aclv4_in_applied &&
-                    (port_row->aclv4_in_applied == acl_row)) {
-                    /* retrieve current clear requested id and increment by 1 for
-                     * this clear request
-                     */
-                    clear_stats_req_id = acl_db_util_get_clear_statistics_requested(
-                                            acl_db_util, port_row) + 1;
-
-                    acl_db_util_set_clear_statistics_requested(acl_db_util,
-                                            port_row, clear_stats_req_id);
-                }
-
-            }
-            OVSREC_VLAN_FOR_EACH(vlan_row, idl) {
-                if (vlan_row->aclv4_in_applied && (vlan_row->aclv4_in_applied == acl_row)) {
-                    VLOG_DBG("Not supported: Clearing ACL statistics vlan=%" PRId64 " acl_name=%s",
-                                vlan_row->id, acl_name);
-                }
-            }
         /* Port (unfortunately called "interface" in the CLI) */
-        } else if (!strcmp(interface_type, "interface")) {
+        if (!strcmp(interface_type, "interface")) {
             /* Get Port row */
             port_row = get_port_by_name(interface_id);
             if (!port_row) {
@@ -1274,18 +1307,28 @@ cli_clear_acl_statistics (const char *acl_type,
                 cli_do_config_abort(transaction);
                 return CMD_ERR_NOTHING_TODO;
             }
-            if (port_row->aclv4_in_applied && (port_row->aclv4_in_applied == acl_row)) {
-                VLOG_DBG("Clearing ACL statistics port=%s acl_name=%s",
-                            port_row->name, acl_name);
-                /* retrieve current clear requested id and increment by 1 for
-                 * this clear request
-                 */
-                clear_stats_req_id = acl_db_util_get_clear_statistics_requested(
-                                        acl_db_util, port_row) + 1;
-                acl_db_util_set_clear_statistics_requested(acl_db_util,
-                                        port_row, clear_stats_req_id);
+            int acl_type_iter;
+            bool nothing_cleared = true;
+            for (acl_type_iter = ACL_CFG_MIN_PORT_TYPES; acl_type_iter <= ACL_CFG_MAX_PORT_TYPES; acl_type_iter++) {
+                if(!strcmp(direction, acl_db_accessor[acl_type_iter].direction_str)) {
+                    const struct ovsrec_acl* cur_acl_applied =
+                        acl_db_util_get_applied(&acl_db_accessor[acl_type_iter], port_row);
 
-            } else {
+                    if (cur_acl_applied && (cur_acl_applied == acl_row)) {
+                        VLOG_DBG("Clearing ACL statistics port=%s acl_name=%s",
+                                    port_row->name, acl_name);
+                        /* retrieve current clear requested id and increment by 1 for
+                         * this clear request
+                         */
+                        clear_stats_req_id = acl_db_util_get_clear_statistics_requested(
+                                                &acl_db_accessor[acl_type_iter], port_row) + 1;
+                        acl_db_util_set_clear_statistics_requested(&acl_db_accessor[acl_type_iter],
+                                                port_row, clear_stats_req_id);
+                        nothing_cleared = false;
+                    }
+                }
+            }
+            if(nothing_cleared == true) {
                 vty_out(vty, "%% Specified ACL not applied to interface%s", VTY_NEWLINE);
                 cli_do_config_abort(transaction);
                 return CMD_ERR_NOTHING_TODO;
@@ -1438,6 +1481,13 @@ access_list_ovsdb_init(void)
     ovsdb_idl_add_column(idl, &ovsrec_port_col_aclv4_in_status);
     ovsdb_idl_add_column(idl,
                     &ovsrec_port_col_aclv4_in_statistics_clear_requested);
+    ovsdb_idl_add_column(idl, &ovsrec_port_col_aclv4_out_applied);
+    ovsdb_idl_add_column(idl, &ovsrec_port_col_aclv4_out_cfg);
+    ovsdb_idl_add_column(idl, &ovsrec_port_col_aclv4_out_cfg_version);
+    ovsdb_idl_add_column(idl, &ovsrec_port_col_aclv4_out_statistics);
+    ovsdb_idl_add_column(idl, &ovsrec_port_col_aclv4_out_status);
+    ovsdb_idl_add_column(idl,
+                    &ovsrec_port_col_aclv4_out_statistics_clear_requested);
 
     /* ACL columns in VLAN table */
     ovsdb_idl_add_table(idl, &ovsrec_table_vlan);
@@ -1447,6 +1497,11 @@ access_list_ovsdb_init(void)
     ovsdb_idl_add_column(idl, &ovsrec_vlan_col_aclv4_in_cfg_version);
     ovsdb_idl_add_column(idl, &ovsrec_vlan_col_aclv4_in_statistics);
     ovsdb_idl_add_column(idl, &ovsrec_vlan_col_aclv4_in_status);
+    ovsdb_idl_add_column(idl, &ovsrec_vlan_col_aclv4_out_applied);
+    ovsdb_idl_add_column(idl, &ovsrec_vlan_col_aclv4_out_cfg);
+    ovsdb_idl_add_column(idl, &ovsrec_vlan_col_aclv4_out_cfg_version);
+    ovsdb_idl_add_column(idl, &ovsrec_vlan_col_aclv4_out_statistics);
+    ovsdb_idl_add_column(idl, &ovsrec_vlan_col_aclv4_out_status);
 
     /* Initialize ACL DB Util array */
     acl_db_util_init();

@@ -30,53 +30,76 @@ struct acl_db_util acl_db_accessor[ACL_CFG_MAX_TYPES];
  * Macro to populate the acl_db_accessor global array at switchd-plugin
  * init time.
  */
-#define ASSIGN_ACL_DB_ACCESSOR(idx, type_arg, direction_arg, base) \
+#define ASSIGN_ACL_DB_ACCESSOR(idx, type_arg, type_str_arg, direction_arg, direction_str_arg, table, interface_arg, base) \
     acl_db_accessor[idx].type = type_arg;                                 \
+    acl_db_accessor[idx].type_str = type_str_arg;                         \
     acl_db_accessor[idx].direction = direction_arg;                       \
+    acl_db_accessor[idx].direction_str = direction_str_arg;               \
+    acl_db_accessor[idx].interface = interface_arg;                       \
     acl_db_accessor[idx].column_applied = \
-                                    &ovsrec_port_col_##base##_applied;      \
-    acl_db_accessor[idx].column_cfg = &ovsrec_port_col_##base##_cfg;    \
+                                    &ovsrec_##table##_col_##base##_applied;      \
+    acl_db_accessor[idx].column_cfg = &ovsrec_##table##_col_##base##_cfg;    \
     acl_db_accessor[idx].column_cfg_version = \
-                                  &ovsrec_port_col_##base##_cfg_version; \
+                                  &ovsrec_##table##_col_##base##_cfg_version; \
     acl_db_accessor[idx].column_cfg_status =\
-                                        &ovsrec_port_col_##base##_status; \
+                                        &ovsrec_##table##_col_##base##_status; \
     acl_db_accessor[idx].offset_applied = \
-                            offsetof(struct ovsrec_port, base##_applied); \
+                            offsetof(struct ovsrec_##table , base##_applied); \
     acl_db_accessor[idx].offset_cfg = \
-                            offsetof(struct ovsrec_port, base##_cfg); \
+                            offsetof(struct ovsrec_##table , base##_cfg); \
     acl_db_accessor[idx].offset_cfg_version = \
-                        offsetof(struct ovsrec_port, base##_cfg_version); \
+                        offsetof(struct ovsrec_##table , base##_cfg_version); \
+    acl_db_accessor[idx].offset_n_cfg_version = \
+                        offsetof(struct ovsrec_##table , n_##base##_cfg_version); \
     acl_db_accessor[idx].offset_cfg_status = \
-                        offsetof(struct ovsrec_port, base##_status); \
+                        offsetof(struct ovsrec_##table , base##_status); \
+    acl_db_accessor[idx].offset_n_statistics = \
+                        offsetof(struct ovsrec_##table , n_##base##_statistics); \
+    acl_db_accessor[idx].offset_key_statistics = \
+                        offsetof(struct ovsrec_##table , key_##base##_statistics); \
+    acl_db_accessor[idx].offset_value_statistics = \
+                        offsetof(struct ovsrec_##table , value_##base##_statistics); \
     acl_db_accessor[idx].set_applied = \
-                                ovsrec_port_set_##base##_applied;      \
-    acl_db_accessor[idx].set_cfg = ovsrec_port_set_##base##_cfg;        \
+                                ovsrec_##table##_set_##base##_applied;      \
+    acl_db_accessor[idx].set_cfg = ovsrec_##table##_set_##base##_cfg;        \
     acl_db_accessor[idx].set_cfg_version = \
-                                   ovsrec_port_set_##base##_cfg_version; \
-    acl_db_accessor[idx].set_cfg_status = ovsrec_port_set_##base##_status; \
+                                   ovsrec_##table##_set_##base##_cfg_version; \
+    acl_db_accessor[idx].set_cfg_status = ovsrec_##table##_set_##base##_status; \
     acl_db_accessor[idx].offset_statistics_clear_requested = \
-                        offsetof(struct ovsrec_port, \
+                        offsetof(struct ovsrec_##table , \
                           base##_statistics_clear_requested); \
     acl_db_accessor[idx].offset_statistics_clear_performed = \
-                        offsetof(struct ovsrec_port, \
+                        offsetof(struct ovsrec_##table , \
                           base##_statistics_clear_performed); \
     acl_db_accessor[idx].set_clear_statistics_requested = \
-                          ovsrec_port_set_##base##_statistics_clear_requested; \
+                          ovsrec_##table##_set_##base##_statistics_clear_requested; \
     acl_db_accessor[idx].set_clear_statistics_performed = \
-                          ovsrec_port_set_##base##_statistics_clear_performed;
+                          ovsrec_##table##_set_##base##_statistics_clear_performed; \
+    acl_db_accessor[idx].status_setkey = \
+                          ovsrec_##table##_update_##base##_status_setkey; \
+    acl_db_accessor[idx].set_statistics = \
+                          ovsrec_##table##_set_##base##_statistics;
 
 
 void
 acl_db_util_init(void) {
     /* Create a global array entry for (aclv4, in) pair. */
-    ASSIGN_ACL_DB_ACCESSOR(0, OPS_CLS_ACL_V4, OPS_CLS_DIRECTION_IN, aclv4_in);
+    ASSIGN_ACL_DB_ACCESSOR((int)ACL_CFG_PORT_V4_IN, OPS_CLS_ACL_V4, "ip", OPS_CLS_DIRECTION_IN, "in", port, OPS_CLS_INTERFACE_PORT, aclv4_in);
+    ASSIGN_ACL_DB_ACCESSOR((int)ACL_CFG_PORT_V4_OUT, OPS_CLS_ACL_V4, "ip", OPS_CLS_DIRECTION_OUT, "out", port, OPS_CLS_INTERFACE_PORT, aclv4_out);
 }
 
 struct acl_db_util *acl_db_util_accessor_get(enum ops_cls_type type,
-                                             enum ops_cls_direction direction)
+                                             enum ops_cls_direction direction,
+                                             enum ops_cls_interface interface)
 {
-    if (type == OPS_CLS_ACL_V4 && direction == OPS_CLS_DIRECTION_IN){
-        return &acl_db_accessor[ACL_CFG_V4_IN];
+    if (interface == OPS_CLS_INTERFACE_PORT) {
+        if (type == OPS_CLS_ACL_V4) {
+            if (direction == OPS_CLS_DIRECTION_IN) {
+                return &acl_db_accessor[ACL_CFG_PORT_V4_IN];
+            } else if (direction == OPS_CLS_DIRECTION_OUT) {
+                return &acl_db_accessor[ACL_CFG_PORT_V4_OUT];
+            }
+        }
     }
 
     return NULL;
@@ -103,11 +126,18 @@ acl_db_util_get_cfg(const struct acl_db_util *acl_db,
                             const struct ovsrec_acl*);
 }
 
-int64_t
+const size_t
+acl_db_util_get_n_cfg_version(const struct acl_db_util *acl_db,
+                              const struct ovsrec_port *port)
+{
+    return MEMBER_AT_OFFSET(port, acl_db->offset_n_cfg_version, size_t);
+}
+
+const int64_t*
 acl_db_util_get_cfg_version(const struct acl_db_util *acl_db,
                               const struct ovsrec_port *port)
 {
-    return MEMBER_AT_OFFSET(port, acl_db->offset_cfg_version, int64_t);
+    return MEMBER_AT_OFFSET(port, acl_db->offset_cfg_version, int64_t *);
 }
 
 const struct smap*
@@ -148,7 +178,29 @@ acl_db_util_get_clear_statistics_performed(const struct acl_db_util *acl_db,
     } else {
         return 0;
     }
-  }
+}
+
+const int64_t*
+acl_db_util_get_value_statistics(const struct acl_db_util *acl_db,
+                                   const struct ovsrec_port *port)
+{
+    return MEMBER_AT_OFFSET(port, acl_db->offset_value_statistics, int64_t *);
+}
+
+const int64_t*
+acl_db_util_get_key_statistics(const struct acl_db_util *acl_db,
+                                 const struct ovsrec_port *port)
+{
+    return MEMBER_AT_OFFSET(port, acl_db->offset_key_statistics, int64_t *);
+}
+
+const size_t
+acl_db_util_get_n_statistics(const struct acl_db_util *acl_db,
+                               const struct ovsrec_port *port)
+{
+    return MEMBER_AT_OFFSET(port, acl_db->offset_n_statistics, size_t);
+}
+
 
 /***** Setters *****/
 void
@@ -165,6 +217,14 @@ acl_db_util_set_cfg(const struct acl_db_util *acl_db,
                       const struct ovsrec_acl *cfg)
 {
     (*acl_db->set_cfg)(port, cfg);
+}
+
+void
+acl_db_util_set_cfg_version(const struct acl_db_util *acl_db,
+                             const struct ovsrec_port *port,
+                             const int64_t *cfg_version)
+{
+    (*acl_db->set_cfg_version)(port, cfg_version, 1);
 }
 
 void
@@ -185,8 +245,27 @@ acl_db_util_set_clear_statistics_requested(const struct acl_db_util *acl_db,
 
 void
 acl_db_util_set_clear_statistics_performed(const struct acl_db_util *acl_db,
-                                            const struct ovsrec_port *port,
-                                            const int64_t clear_stats_ack_id)
+                                                 const struct ovsrec_port *port,
+                                                 const int64_t clear_stats_performed_id)
 {
-    (*acl_db->set_clear_statistics_performed)(port, &clear_stats_ack_id, 1);
+    (*acl_db->set_clear_statistics_performed)(port, &clear_stats_performed_id, 1);
+}
+
+void
+acl_db_util_status_setkey(const struct acl_db_util *acl_db,
+                                            const struct ovsrec_port *port,
+                                            char *status,
+                                            char *detail)
+{
+    (*acl_db->status_setkey)(port, status, detail);
+}
+
+void
+acl_db_util_set_statistics(const struct acl_db_util *acl_db,
+                                            const struct ovsrec_port *port,
+                                            const int64_t *key_statistics,
+                                            const int64_t *value_statistics,
+                                            size_t n_statistics)
+{
+    (*acl_db->set_statistics)(port, key_statistics, value_statistics, n_statistics);
 }

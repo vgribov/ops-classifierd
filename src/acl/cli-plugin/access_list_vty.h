@@ -56,6 +56,7 @@
 #define ACL_CFG_STR "Display user-specified configuration\n"
 #define ACL_HITCOUNTS_STR "Hit counts (statistics)\n"
 #define ACL_IN_STR "Inbound (ingress) traffic\n"
+#define ACL_OUT_STR "Outbound (egress) traffic\n"
 #define ACL_IP_STR "Internet Protocol v4 (IPv4)\n"
 #define ACL_INTERFACE_STR "Specify interface\n"
 #define ACL_INTERFACE_NAME_STR "Interface Name\n"

@@ -42,7 +42,7 @@
 #define OPS_CLS_ASIC_PLUGIN_INTERFACE_MINOR     1
 
 #define ACL_LOG_INGRESS_PORT   0x00000001 /**< Indicates the ingress_port_name field contains valid data */
-#define ACL_LOG_EGRESS_PORT    0x00000002 /**< Indicates the egress_port field contains valid data */
+#define ACL_LOG_EGRESS_PORT    0x00000002 /**< Indicates the egress_port_name field contains valid data */
 #define ACL_LOG_INGRESS_VLAN   0x00000004 /**< Indicates the ingress_vlan field contains valid data */
 #define ACL_LOG_EGRESS_VLAN    0x00000008 /**< Indicates the egress_vlan field contains valid data */
 #define ACL_LOG_NODE           0x00000010 /**< Indicates the node field contains valid data */
@@ -76,8 +76,9 @@ struct acl_log_info {
     uint32_t    ingress_port; /**< @deprecated */
     char        ingress_port_name[ACL_LOG_PORT_NAME_LEN + 1]; /**< The name of
                                 the port that the packet ingresses on. */
-    uint32_t    egress_port;  /**< The destination port (if available),
-                                generally for unicast packets. */
+    uint32_t    egress_port;  /**< @deprecated */
+    char        egress_port_name[ACL_LOG_PORT_NAME_LEN + 1]; /**< The name of
+                                the port that the packet egresses on. */
     uint16_t    ingress_vlan; /**< The ID of the VLAN that the packet ingresses
                                 on. */
     uint16_t    egress_vlan;  /**< The ID of the VLAN that the packet egresses
@@ -111,7 +112,8 @@ enum ops_cls_direction
 {
     OPS_CLS_DIRECTION_INVALID = 0,
     OPS_CLS_DIRECTION_IN,
-    OPS_CLS_DIRECTION_OUT
+    OPS_CLS_DIRECTION_OUT,
+    OPS_CLS_MAX_DIRECTION
 };
 
 /**
