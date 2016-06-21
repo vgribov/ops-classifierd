@@ -575,7 +575,7 @@ def test_acl_create_delete(topology, step):
     test1_result = ops1('show run')
 
     assert search(
-         r'(access-list\s+ip\s+test1\s+)'.format(
+         r'(access-list\s+ip\s+test1)'.format(
                                          **locals()
                                      ), test1_result
     )
@@ -587,7 +587,7 @@ def test_acl_create_delete(topology, step):
     test1_result = ops1('show run')
 
     assert search(
-         r'(access-list\s+ip\s+test1\s+)'.format(
+         r'(access-list\s+ip\s+test1)'.format(
                                          **locals()
                                      ), test1_result
     )
