@@ -809,15 +809,17 @@ cli_print_acls (const char *interface_type,
 }
 
 int
-cli_reset_acls(const char *acl_type, const char *acl_name)
+cli_reset_acls_all(void)
 {
     struct ovsdb_idl_txn *transaction;
     enum ovsdb_idl_txn_status txn_status;
     const struct ovsrec_acl *acl_row;
+    const struct ovsrec_port *port_row;
+    const struct ovsrec_vlan *vlan_row;
     int64_t pending_cfg_version;
     bool reset_performed = false;
 
-    VLOG_DBG("Reset");
+    VLOG_DBG("Reset All ACLs");
 
     /* Start transaction */
     transaction = cli_do_config_start();
@@ -826,28 +828,43 @@ cli_reset_acls(const char *acl_type, const char *acl_name)
         return CMD_OVSDB_FAILURE;
     }
 
-    /* Reset single ACL specified by type and name */
-    if (acl_type && acl_name) {
-        acl_row = get_acl_by_type_name(acl_type, acl_name);
-        if (!acl_row) {
-            vty_out(vty, "%% ACL does not exist%s", VTY_NEWLINE);
-            cli_do_config_abort(transaction);
-            return CMD_ERR_NOTHING_TODO;
+    /* Reset all ACL entries */
+    OVSREC_ACL_FOR_EACH(acl_row, idl) {
+        if (!aces_cur_cfg_equal(acl_row)) {
+            ovsrec_acl_set_cfg_aces(acl_row, acl_row->key_cur_aces, acl_row->value_cur_aces, acl_row->n_cur_aces);
+            pending_cfg_version = acl_row->cfg_version[0] + 1;
+            ovsrec_acl_set_cfg_version(acl_row, &pending_cfg_version, 1);
+            reset_performed = true;
         }
-        ovsrec_acl_set_cfg_aces(acl_row, acl_row->key_cur_aces, acl_row->value_cur_aces, acl_row->n_cur_aces);
-        pending_cfg_version = acl_row->cfg_version[0] + 1;
-        ovsrec_acl_set_cfg_version(acl_row, &pending_cfg_version, 1);
-        reset_performed = true;
+    }
 
-    /* Reset all ACLs (applied or not) */
-    } else {
-        OVSREC_ACL_FOR_EACH(acl_row, idl) {
-            if (!aces_cur_cfg_equal(acl_row)) {
-                ovsrec_acl_set_cfg_aces(acl_row, acl_row->key_cur_aces, acl_row->value_cur_aces, acl_row->n_cur_aces);
-                pending_cfg_version = acl_row->cfg_version[0] + 1;
-                ovsrec_acl_set_cfg_version(acl_row, &pending_cfg_version, 1);
-                reset_performed = true;
+    /* Reset all Port ACL applies */
+    OVSREC_PORT_FOR_EACH(port_row, idl) {
+        /* Check, reset IPv4 inbound ACL applied to port (even NULL) */
+        if (port_row->aclv4_in_applied != port_row->aclv4_in_cfg) {
+            ovsrec_port_set_aclv4_in_cfg(port_row, port_row->aclv4_in_applied);
+            if (port_row->n_aclv4_in_cfg_version) {
+                pending_cfg_version = port_row->aclv4_in_cfg_version[0] + 1;
+            } else {
+                pending_cfg_version = 0;
             }
+            ovsrec_port_set_aclv4_in_cfg_version(port_row, &pending_cfg_version, 1);
+            reset_performed = true;
+        }
+    }
+
+    /* Reset all VLAN ACL applies */
+    OVSREC_VLAN_FOR_EACH(vlan_row, idl) {
+        /* Check, reset IPv4 inbound ACL applied to vlan (even NULL) */
+        if (vlan_row->aclv4_in_applied != vlan_row->aclv4_in_cfg) {
+            ovsrec_vlan_set_aclv4_in_cfg(vlan_row, vlan_row->aclv4_in_applied);
+            if (vlan_row->n_aclv4_in_cfg_version) {
+                pending_cfg_version = vlan_row->aclv4_in_cfg_version[0] + 1;
+            } else {
+                pending_cfg_version = 0;
+            }
+            ovsrec_vlan_set_aclv4_in_cfg_version(vlan_row, &pending_cfg_version, 1);
+            reset_performed = true;
         }
     }
 
@@ -1087,113 +1104,6 @@ cli_unapply_acl (const char *interface_type,
             cli_do_config_abort(transaction);
             return CMD_ERR_NOTHING_TODO;
         }
-    }
-
-    /* Complete transaction */
-    txn_status = cli_do_config_finish(transaction);
-    if (txn_status != TXN_SUCCESS && txn_status != TXN_UNCHANGED) {
-        VLOG_ERR(OVSDB_TXN_COMMIT_ERROR);
-        return CMD_OVSDB_FAILURE;
-    }
-
-    return CMD_SUCCESS;
-}
-
-int
-cli_reset_applied_acls(const char *interface_type,
-                     const char *interface_id,
-                     const char *acl_type,
-                     const char *direction)
-{
-    struct ovsdb_idl_txn *transaction;
-    enum ovsdb_idl_txn_status txn_status;
-    const struct ovsrec_port *port_row;
-    const struct ovsrec_vlan *vlan_row;
-    int64_t pending_cfg_version;
-    bool reset_performed = false;
-
-    VLOG_DBG("Reset applied");
-
-    /* Start transaction */
-    transaction = cli_do_config_start();
-    if (!transaction) {
-        VLOG_ERR("Unable to acquire transaction");
-        return CMD_OVSDB_FAILURE;
-    }
-
-    /* Reset Port ("interface" in the CLI) ACL apply configuration*/
-    if (interface_type && !strcmp(interface_type, "interface")) {
-        port_row = get_port_by_name(interface_id);
-        if (!port_row) {
-            vty_out(vty, "%% Port does not exist%s", VTY_NEWLINE);
-            cli_do_config_abort(transaction);
-            return CMD_ERR_NOTHING_TODO;
-        }
-        /* Check, reset IPv4 inbound ACL applied to port (even NULL) */
-        if (port_row->aclv4_in_applied != port_row->aclv4_in_cfg) {
-            ovsrec_port_set_aclv4_in_cfg(port_row, port_row->aclv4_in_applied);
-            if (port_row->n_aclv4_in_cfg_version) {
-                pending_cfg_version = port_row->aclv4_in_cfg_version[0] + 1;
-            } else {
-                pending_cfg_version = 0;
-            }
-            ovsrec_port_set_aclv4_in_cfg_version(port_row, &pending_cfg_version, 1);
-            reset_performed = true;
-        }
-
-    /* Reset VLAN ACL apply configuration*/
-    } else if (interface_type && !strcmp(interface_type, "vlan")) {
-        vlan_row = get_vlan_by_id_str(interface_id);
-        if (!vlan_row) {
-            vty_out(vty, "%% VLAN does not exist%s", VTY_NEWLINE);
-            cli_do_config_abort(transaction);
-            return CMD_ERR_NOTHING_TODO;
-        }
-        /* Check, reset IPv4 inbound ACL applied to vlan (even NULL) */
-        if (vlan_row->aclv4_in_applied != vlan_row->aclv4_in_cfg) {
-            ovsrec_vlan_set_aclv4_in_cfg(vlan_row, vlan_row->aclv4_in_applied);
-            if (vlan_row->n_aclv4_in_cfg_version) {
-                pending_cfg_version = vlan_row->aclv4_in_cfg_version[0] + 1;
-            } else {
-                pending_cfg_version = 0;
-            }
-            ovsrec_vlan_set_aclv4_in_cfg_version(vlan_row, &pending_cfg_version, 1);
-            reset_performed = true;
-        }
-
-    /* No interface type specified- reset all applications */
-    } else {
-        OVSREC_PORT_FOR_EACH(port_row, idl) {
-            /* Check, reset IPv4 inbound ACL applied to port (even NULL) */
-            if (port_row->aclv4_in_applied != port_row->aclv4_in_cfg) {
-                ovsrec_port_set_aclv4_in_cfg(port_row, port_row->aclv4_in_applied);
-                if (port_row->n_aclv4_in_cfg_version) {
-                    pending_cfg_version = port_row->aclv4_in_cfg_version[0] + 1;
-                } else {
-                    pending_cfg_version = 0;
-                }
-                ovsrec_port_set_aclv4_in_cfg_version(port_row, &pending_cfg_version, 1);
-                reset_performed = true;
-            }
-        }
-        OVSREC_VLAN_FOR_EACH(vlan_row, idl) {
-            /* Check, reset IPv4 inbound ACL applied to vlan (even NULL) */
-            if (vlan_row->aclv4_in_applied != vlan_row->aclv4_in_cfg) {
-                ovsrec_vlan_set_aclv4_in_cfg(vlan_row, vlan_row->aclv4_in_applied);
-                if (vlan_row->n_aclv4_in_cfg_version) {
-                    pending_cfg_version = vlan_row->aclv4_in_cfg_version[0] + 1;
-                } else {
-                    pending_cfg_version = 0;
-                }
-                ovsrec_vlan_set_aclv4_in_cfg_version(vlan_row, &pending_cfg_version, 1);
-                reset_performed = true;
-            }
-        }
-    }
-
-    if (!reset_performed) {
-        cli_do_config_abort(transaction);
-        return CMD_ERR_NOTHING_TODO;
     }
 
     /* Complete transaction */
