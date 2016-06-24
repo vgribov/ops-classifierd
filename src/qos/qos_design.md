@@ -52,7 +52,7 @@ The platform-independent part of SwitchD for QoS is implemented as a dynamically
 
 ## Logical view
 
-``` ditaa
+```ditaa
          +---------+ +----------+
 qos.yaml | Command | |   REST   |
 +------+ |  Line   | |  Custom  |
