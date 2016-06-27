@@ -366,7 +366,7 @@ set_dscp_map() configures one or more entries of the DSCP Map table.  When the o
 
 EOPNOTSUPP is returned when the underlying ASIC cannot support the configuration.  EINVAL is returned when any parameter fails validation checks.
 
-````ditaa
+```ditaa
 int (*set_port_qos_cfg)(struct ofproto *ofproto,
                         void *aux,
                         const struct qos_port_settings *settings);
