@@ -33,9 +33,9 @@ VLOG_DEFINE_THIS_MODULE(ops_cls_status_msgs);
  * @{ */
 
 /** This defines a common string that will be prefixed to the specific
- *  error message. e.g.
+ *  error message if the port/vlan name is provided. e.g.
  *  Failed to <operation> <feature> on <interface type> <interface#>
- *  <sequence_no_str>
+ *  <sequence_no_str> <reason>
  *   operation - apply, remove, replace, update, get, clear, clearall
  *   feature - acl, acl list, acl statistics
  *   interface type - port, vlan, etc
@@ -43,11 +43,24 @@ VLOG_DEFINE_THIS_MODULE(ops_cls_status_msgs);
  *   sequence_no_str - In case sequence number is valid, it will
  *                     display " at entry sequence number XX. "
  *                     otherwise, it will not display anything.
- * Note: there is no space between last two string format specifier
- *       for readability purpose as reasons string will be appended
+ *   reason - reason for the failure
+ * Note: there is no space between the second-to-last two string format
+ *       specifier for readability purpose as reasons string will be appended
  *       to this string
  */
-#define OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX "Failed to %s %s on %s %s%s"
+#define OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX "Failed to %s %s on %s %s%s%s"
+
+/** This defines a common string that will be prefixed to the specific
+ *  error message if no port/vlan name is provided. e.g.
+ *  Failed to <operation> <feature> <sequence_no_str> <reason>
+ *   operation - apply, remove, replace, update, get, clear, clearall
+ *   feature - acl, acl list, acl statistics
+ *   sequence_no_str - In case sequence number is valid, it will
+ *                     display " at entry sequence number XX. "
+ *                     otherwise, it will not display anything.
+ *   reason - reason for the failure
+ */
+#define OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX_NO_INT "Failed to %s %s%s%s"
 
 /** string to be displayed if sequence number is valid
  *  Note: one space at the end is added for readability because the reason
@@ -77,85 +90,83 @@ const struct ops_cls_status_table_entry ops_cls_status_msgs[] = {
     },
     {
         OPS_CLS_STATUS_HW_INTERNAL_ERR,
-        OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX "reason: internal error."
+        "reason: internal error."
     },
     {
         OPS_CLS_STATUS_HW_MEMORY_ERR,
-        OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX "reason: out of memory."
+        "reason: out of memory."
     },
     {
         OPS_CLS_STATUS_HW_UNIT_ERR,
-        OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX "reason: invalid unit"
+        "reason: invalid unit"
     },
     {
         OPS_CLS_STATUS_HW_PARAM_ERR,
-        OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX "reason: invalid parameter"
+        "reason: invalid parameter"
     },
     {
         OPS_CLS_STATUS_HW_EMPTY_ERR,
-        OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX "reason: empty table"
+        "reason: empty table"
     },
     {
         OPS_CLS_STATUS_HW_FULL_ERR,
-        OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX "reason: full table"
+        "reason: full table"
     },
     {
         OPS_CLS_STATUS_HW_NOT_FOUND_ERR,
-        OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX "reason: entry not found"
+        "reason: entry not found"
     },
     {
         OPS_CLS_STATUS_HW_EXISTS_ERR,
-        OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX "reason: entry already exist"
+        "reason: entry already exist"
     },
     {
         OPS_CLS_STATUS_HW_TIMEOUT_ERR,
-        OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX "reason: operation timed out"
+        "reason: operation timed out"
     },
     {
         OPS_CLS_STATUS_HW_BUSY_ERR,
-        OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX "reason: hardware busy"
+        "reason: hardware busy"
     },
     {
         OPS_CLS_STATUS_HW_FAIL_ERR,
-        OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX "reason: operation failed"
+        "reason: operation failed"
     },
     {
         OPS_CLS_STATUS_HW_DISABLED_ERR,
-        OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX "reason: operation is disabled"
+        "reason: operation is disabled"
     },
     {
         OPS_CLS_STATUS_HW_BADID_ERR,
-        OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX "reason: invalid identifier"
+        "reason: invalid identifier"
     },
     {
         OPS_CLS_STATUS_HW_RESOURCE_ERR,
-        OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX
-                  "reason: no resource for operation"
+        "reason: no resource for operation"
     },
     {
         OPS_CLS_STATUS_HW_CONFIG_ERR,
-        OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX "reason: invalid configuration"
+        "reason: invalid configuration"
     },
     {
         OPS_CLS_STATUS_HW_UNAVAIL_ERR,
-        OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX "reason: feature unavailable"
+        "reason: feature unavailable"
     },
     {
         OPS_CLS_STATUS_HW_INIT_ERR,
-        OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX "reason: feature not initialized"
+        "reason: feature not initialized"
     },
     {
         OPS_CLS_STATUS_HW_PORT_ERR,
-        OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX "reason: invalid port"
+        "reason: invalid port"
     },
     {
         OPS_CLS_STATUS_HW_UNKNOWN_ERR,
-        OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX "reason: unknown error"
+        "reason: unknown error"
     },
     {
         OPS_CLS_STATUS_HW_UNSUPPORTED_ERR,
-        OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX
-                  "reason: entry contains unsupported parameter"
+        "reason: entry contains unsupported parameter"
     },
     {
         OPS_CLS_STATUS_LIST_PARSE_ERR, "Failed to parse ACL configuration for %s"
@@ -197,14 +208,16 @@ void ops_cls_status_msgs_get(enum ops_cls_list_status_code status_code,
              * entry sequence number string.
              */
             if (iface_num) {
-                snprintf(status_msg_str,len,status_table_str,
+                snprintf(status_msg_str,len,
+                         OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX,
                          op_str,feature_str,
                          iface_str,iface_num,
-                         OPS_CLS_STATUS_MSG_SEQ_NUM_INVALID);
+                         OPS_CLS_STATUS_MSG_SEQ_NUM_INVALID, status_table_str);
             } else {
-                snprintf(status_msg_str,len,status_table_str,
+                snprintf(status_msg_str,len,
+                         OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX_NO_INT,
                          op_str,feature_str,
-                         OPS_CLS_STATUS_MSG_SEQ_NUM_INVALID);
+                         OPS_CLS_STATUS_MSG_SEQ_NUM_INVALID, status_table_str);
             }
         } else {
             /* valid entry sequence number, so format the string using
@@ -214,12 +227,14 @@ void ops_cls_status_msgs_get(enum ops_cls_list_status_code status_code,
                      OPS_CLS_STATUS_MSG_SEQ_NUM_VALID,seq_num);
 
             if (iface_num) {
-                snprintf(status_msg_str,len,status_table_str,
+                snprintf(status_msg_str,len,
+                         OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX,
                          op_str,feature_str,
-                         iface_str,iface_num,seq_num_str);
+                         iface_str,iface_num,seq_num_str,status_table_str);
             } else {
-                snprintf(status_msg_str,len,status_table_str,
-                         op_str,feature_str, seq_num_str);
+                snprintf(status_msg_str,len,
+                         OPS_CLS_STATUS_MSG_COMMON_ERR_PREFIX_NO_INT,
+                         op_str,feature_str, seq_num_str, status_table_str);
             }
 
         } /* end if seq_num == 0 */
