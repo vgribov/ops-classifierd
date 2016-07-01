@@ -59,18 +59,18 @@ qos_free_queue_profile_settings(struct queue_profile_settings *settings)
                         /* free each local priority entry */
                         free(qp_entry->local_priorities[lp_index]);
                     }
-                }
 
-                /* free the variable-length local-priority pointer array */
-                free(qp_entry->local_priorities);
+                    /* free the variable-length local-priority pointer array */
+                    free(qp_entry->local_priorities);
+                }
 
                 /* then free the queue entry itself */
                 free(qp_entry);
             }
-        }
 
-        /* finally, free up the settings parameter itself */
-        free(settings->entries);
+            /* finally, free up the settings parameter itself */
+            free(settings->entries);
+        }
         free(settings);
     }
     return;
@@ -173,10 +173,10 @@ qos_get_schedule_algorithm(char *db_algorithm)
     algorithm = ALGORITHM_STRICT;
 
     if (db_algorithm) {
-        if (!strncmp(db_algorithm, OVSREC_QUEUE_ALGORITHM_STRICT, 8)) {
+        if (!strcmp(db_algorithm, OVSREC_QUEUE_ALGORITHM_STRICT)) {
             algorithm = ALGORITHM_STRICT;
         }
-        else if (!strncmp(db_algorithm, OVSREC_QUEUE_ALGORITHM_DWRR, 8)) {
+        else if (!strcmp(db_algorithm, OVSREC_QUEUE_ALGORITHM_DWRR)) {
             algorithm = ALGORITHM_DWRR;
         }
     }
@@ -485,7 +485,8 @@ qos_configure_port_profiles(struct ofproto *ofproto,
 
     /* Make sure this port has interfaces that are 'system' type.
        QoS should not affect other types. */
-    if (strcmp(port_cfg->interfaces[0]->type, OVSREC_INTERFACE_TYPE_SYSTEM)) {
+    if (port_cfg && port_cfg->interfaces[0] &&
+        strcmp(port_cfg->interfaces[0]->type, OVSREC_INTERFACE_TYPE_SYSTEM)) {
         /* Return if not system */
         return;
     }
