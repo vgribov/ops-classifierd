@@ -211,12 +211,10 @@ def case_3_remove_first_source_to_active_mirror_session_foo_succeeds():
     assert int_idx >= 0
     assert out['source'][int_idx]['type'] == 'interface'
     assert out['source'][int_idx]['direction'] == 'rx'
-    # note: instead of searching for "none", we have to search for "tx"
-    #       because "show mirror" reverses the parameters in the "none case
-    int_idx = interface_in_source_list(out, "tx")
+    int_idx = interface_in_source_list(out, "none")
     assert int_idx >= 0
     assert out['source'][int_idx]['type'] == 'interface'
-    assert out['source'][int_idx]['direction'] == 'none'
+    assert out['source'][int_idx]['direction'] == 'tx'
     assert out['destination']['type'] == 'interface'
     assert out['destination']['id'] == p3
 
@@ -235,10 +233,10 @@ def case_4_activate_mirror_session_bar_succeeds():
     assert int_idx >= 0
     assert out['source'][int_idx]['type'] == 'interface'
     assert out['source'][int_idx]['direction'] == 'tx'
-    int_idx = interface_in_source_list(out, "rx")
+    int_idx = interface_in_source_list(out, "none")
     assert int_idx >= 0
     assert out['source'][int_idx]['type'] == 'interface'
-    assert out['source'][int_idx]['direction'] == 'none'
+    assert out['source'][int_idx]['direction'] == 'rx'
     assert out['destination']['type'] == 'interface'
     assert out['destination']['id'] == p4
 
@@ -261,10 +259,10 @@ def case_5_attempt_another_session_using_existing_destination_fails():
     assert int_idx >= 0
     assert out['source'][int_idx]['type'] == 'interface'
     assert out['source'][int_idx]['direction'] == 'rx'
-    int_idx = interface_in_source_list(out, "tx")
+    int_idx = interface_in_source_list(out, "none")
     assert int_idx >= 0
     assert out['source'][int_idx]['type'] == 'interface'
-    assert out['source'][int_idx]['direction'] == 'none'
+    assert out['source'][int_idx]['direction'] == 'tx'
     assert out['destination']['type'] == 'interface'
     assert out['destination']['id'] == p4
 
@@ -432,10 +430,10 @@ def case_20_mirror_session_with_source_lag_succeeds():
     assert int_idx >= 0
     assert out['source'][int_idx]['type'] == 'interface'
     assert out['source'][int_idx]['direction'] == 'rx'
-    int_idx = interface_in_source_list(out, "tx")
+    int_idx = interface_in_source_list(out, "none")
     assert int_idx >= 0
     assert out['source'][int_idx]['type'] == 'interface'
-    assert out['source'][int_idx]['direction'] == 'none'
+    assert out['source'][int_idx]['direction'] == 'tx'
     assert out['destination']['type'] == 'interface'
     assert out['destination']['id'] == p3
 
@@ -461,10 +459,10 @@ def case_21_mirror_session_with_destination_lag_succeeds():
     assert int_idx >= 0
     assert out['source'][int_idx]['type'] == 'interface'
     assert out['source'][int_idx]['direction'] == 'rx'
-    int_idx = interface_in_source_list(out, "tx")
+    int_idx = interface_in_source_list(out, "none")
     assert int_idx >= 0
     assert out['source'][int_idx]['type'] == 'interface'
-    assert out['source'][int_idx]['direction'] == 'none'
+    assert out['source'][int_idx]['direction'] == 'tx'
     assert out['destination']['type'] == 'interface'
     assert out['destination']['id'] == "lag100"
 
