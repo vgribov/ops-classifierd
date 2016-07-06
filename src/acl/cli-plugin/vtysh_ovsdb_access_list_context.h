@@ -33,6 +33,7 @@
  * @return           e_vtysh_ok on success
  *
  * @sa print_acl_commands A similar function that uses a different print method
+ * @sa print_acl_mismatch_warning Another function for config mismatch warnings
  */
 vtysh_ret_val show_run_access_list_callback(void *p_private);
 
@@ -43,5 +44,7 @@ vtysh_ret_val show_run_access_list_callback(void *p_private);
  *                   structure object
  *
  * @return           e_vtysh_ok on success
+ *
+ * @sa print_acl_mismatch_warning Another function for config mismatch warnings
  */
 vtysh_ret_val show_run_access_list_subcontext_callback(void *p_private);

@@ -42,6 +42,7 @@
 #include <ops_cls_status_msgs.h>
 
 #include "access_list_vty_util.h"
+#include "access_list_vty_ovsdb_util.h"
 
 /** Create logging module */
 VLOG_DEFINE_THIS_MODULE(vtysh_access_list_cli_ovsdb_util);
@@ -381,7 +382,30 @@ print_vlan_aclv4_in_statistics(const struct ovsrec_vlan *vlan_row)
     }
 }
 
-bool aces_cur_cfg_equal (const struct ovsrec_acl *acl_row)
+void
+print_acl_mismatch_warning(const char *acl_name, const char *commands)
+{
+    if (commands) {
+        vty_out(vty,
+                "! access-list %s %s%s"
+                "! %s%s",
+                acl_name,
+                ACL_MISMATCH_WARNING,
+                VTY_NEWLINE,
+                ACL_MISMATCH_HINT_RESET,
+                VTY_NEWLINE);
+    } else {
+        vty_out(vty,
+                "%% Warning: %s %s%s",
+                acl_name, ACL_MISMATCH_WARNING, VTY_NEWLINE);
+        vty_out(vty,
+                "%%          %s%s",
+                ACL_MISMATCH_HINT_RESET, VTY_NEWLINE);
+    }
+}
+
+bool
+aces_cur_cfg_equal(const struct ovsrec_acl *acl_row)
 {
     /* Compare number of entries */
     if (acl_row->n_cur_aces != acl_row->n_cfg_aces) {

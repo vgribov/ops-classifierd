@@ -614,8 +614,6 @@ cli_print_acls (const char *interface_type,
     const struct ovsrec_port *port_row = NULL;
     const struct ovsrec_vlan *vlan_row = NULL;
     char vlan_id_str[21]; /* Max string length of 64-bit number +1 for NULL */
-    bool applied_cfg_mismatch = false;
-    bool aces_cur_cfg_mismatch = false;
 
     /* Get System table */
     ovs = ovsrec_system_first(idl);
@@ -633,44 +631,46 @@ cli_print_acls (const char *interface_type,
         }
         /* Print tabular */
         if (!commands) {
+            if (!aces_cur_cfg_equal(acl_row)) {
+                print_acl_mismatch_warning(acl_row->name, commands);
+            }
             print_acl_tabular_header();
             print_acl_horizontal_rule();
             print_acl_tabular(acl_row, configuration);
             print_acl_horizontal_rule();
-        /* Print commands (including apply statements) */
+        /* Print entry and apply commands */
         } else {
+            if (!aces_cur_cfg_equal(acl_row)) {
+                print_acl_mismatch_warning(acl_row->name, commands);
+            }
             print_acl_commands(acl_row, configuration);
+
             OVSREC_PORT_FOR_EACH(port_row, idl) {
                 if (!configuration && port_row->aclv4_in_applied == acl_row) {
+                    if (port_row->aclv4_in_applied != port_row->aclv4_in_cfg) {
+                        print_acl_mismatch_warning(acl_row->name, commands);
+                    }
                     print_acl_apply_commands("interface", port_row->name, "in", port_row->aclv4_in_applied);
-                    if (!aces_cur_cfg_mismatch && !aces_cur_cfg_equal(port_row->aclv4_in_applied)) {
-                        aces_cur_cfg_mismatch = true;
-                    }
                 } else if (configuration && port_row->aclv4_in_cfg == acl_row) {
-                    print_acl_apply_commands("interface", port_row->name, "in", port_row->aclv4_in_cfg);
-                    if (!aces_cur_cfg_mismatch && !aces_cur_cfg_equal(port_row->aclv4_in_cfg)) {
-                        aces_cur_cfg_mismatch = true;
+                    if (port_row->aclv4_in_applied != port_row->aclv4_in_cfg) {
+                        print_acl_mismatch_warning(acl_row->name, commands);
                     }
-                }
-                if (!applied_cfg_mismatch && (port_row->aclv4_in_applied != port_row->aclv4_in_cfg)) {
-                    applied_cfg_mismatch = true;
+                    print_acl_apply_commands("interface", port_row->name, "in", port_row->aclv4_in_cfg);
                 }
             }
+
             OVSREC_VLAN_FOR_EACH(vlan_row, idl) {
                 sprintf(vlan_id_str, "%" PRId64, vlan_row->id);
                 if (!configuration && vlan_row->aclv4_in_applied == acl_row) {
+                    if (vlan_row->aclv4_in_applied != vlan_row->aclv4_in_cfg) {
+                        print_acl_mismatch_warning(acl_row->name, commands);
+                    }
                     print_acl_apply_commands("vlan", vlan_id_str, "in", vlan_row->aclv4_in_applied);
-                    if (!aces_cur_cfg_mismatch && !aces_cur_cfg_equal(vlan_row->aclv4_in_applied)) {
-                        aces_cur_cfg_mismatch = true;
-                    }
                 } else if (configuration && vlan_row->aclv4_in_cfg == acl_row) {
-                    print_acl_apply_commands("vlan", vlan_id_str, "in", vlan_row->aclv4_in_cfg);
-                    if (!aces_cur_cfg_mismatch && !aces_cur_cfg_equal(vlan_row->aclv4_in_cfg)) {
-                        aces_cur_cfg_mismatch = true;
+                    if (vlan_row->aclv4_in_applied != vlan_row->aclv4_in_cfg) {
+                        print_acl_mismatch_warning(acl_row->name, commands);
                     }
-                }
-                if (!applied_cfg_mismatch && (vlan_row->aclv4_in_applied != vlan_row->aclv4_in_cfg)) {
-                    applied_cfg_mismatch = true;
+                    print_acl_apply_commands("vlan", vlan_id_str, "in", vlan_row->aclv4_in_cfg);
                 }
             }
         }
@@ -691,6 +691,9 @@ cli_print_acls (const char *interface_type,
         if (acl_row) {
             /* Print tabular */
             if (!commands) {
+                if (!aces_cur_cfg_equal(acl_row)) {
+                    print_acl_mismatch_warning(acl_row->name, commands);
+                }
                 vty_out(vty, "%-10s %-31s%s", "Direction", "", VTY_NEWLINE);
                 print_acl_tabular_header();
                 print_acl_horizontal_rule();
@@ -699,14 +702,15 @@ cli_print_acls (const char *interface_type,
                 print_acl_horizontal_rule();
             /* Print commands (including apply statements) */
             } else {
+                if (!aces_cur_cfg_equal(acl_row)) {
+                    print_acl_mismatch_warning(acl_row->name, commands);
+                }
                 print_acl_commands(acl_row, configuration);
+
+                if (port_row->aclv4_in_applied != port_row->aclv4_in_cfg) {
+                    print_acl_mismatch_warning(acl_row->name, commands);
+                }
                 print_acl_apply_commands(interface_type, interface_id, "in", acl_row);
-                if (!aces_cur_cfg_mismatch && !aces_cur_cfg_equal(acl_row)) {
-                    aces_cur_cfg_mismatch = true;
-                }
-                if (!applied_cfg_mismatch && (port_row->aclv4_in_applied != port_row->aclv4_in_cfg)) {
-                    applied_cfg_mismatch = true;
-                }
             }
         }
 
@@ -726,6 +730,9 @@ cli_print_acls (const char *interface_type,
         if (acl_row) {
             /* Print tabular */
             if (!commands) {
+                if (!aces_cur_cfg_equal(acl_row)) {
+                    print_acl_mismatch_warning(acl_row->name, commands);
+                }
                 vty_out(vty, "%-10s %-31s%s", "Direction", "", VTY_NEWLINE);
                 print_acl_tabular_header();
                 print_acl_horizontal_rule();
@@ -734,14 +741,15 @@ cli_print_acls (const char *interface_type,
                 print_acl_horizontal_rule();
             /* Print commands (including apply statements) */
             } else {
+                if (!aces_cur_cfg_equal(acl_row)) {
+                    print_acl_mismatch_warning(acl_row->name, commands);
+                }
                 print_acl_commands(acl_row, configuration);
+
+                if (vlan_row->aclv4_in_applied != vlan_row->aclv4_in_cfg) {
+                    print_acl_mismatch_warning(acl_row->name, commands);
+                }
                 print_acl_apply_commands(interface_type, interface_id, "in", acl_row);
-                if (!aces_cur_cfg_mismatch && !aces_cur_cfg_equal(acl_row)) {
-                    aces_cur_cfg_mismatch = true;
-                }
-                if (!applied_cfg_mismatch && (vlan_row->aclv4_in_applied != vlan_row->aclv4_in_cfg)) {
-                    applied_cfg_mismatch = true;
-                }
             }
         }
 
@@ -752,57 +760,48 @@ cli_print_acls (const char *interface_type,
                 print_acl_tabular_header();
                 OVSREC_ACL_FOR_EACH(acl_row, idl) {
                     print_acl_horizontal_rule();
+                    if (!aces_cur_cfg_equal(acl_row)) {
+                        print_acl_mismatch_warning(acl_row->name, commands);
+                    }
                     print_acl_tabular(acl_row, configuration);
                 }
                 print_acl_horizontal_rule();
             } else {
                 OVSREC_ACL_FOR_EACH(acl_row, idl) {
+                    if (!aces_cur_cfg_equal(acl_row)) {
+                        print_acl_mismatch_warning(acl_row->name, commands);
+                    }
                     print_acl_commands(acl_row, configuration);
                 }
                 OVSREC_PORT_FOR_EACH(port_row, idl) {
                     if (!configuration && port_row->aclv4_in_applied) {
+                        if (port_row->aclv4_in_applied != port_row->aclv4_in_cfg) {
+                            print_acl_mismatch_warning(port_row->aclv4_in_applied->name, commands);
+                        }
                         print_acl_apply_commands("interface", port_row->name, "in", port_row->aclv4_in_applied);
-                        if (!aces_cur_cfg_mismatch && !aces_cur_cfg_equal(port_row->aclv4_in_applied)) {
-                            aces_cur_cfg_mismatch = true;
-                        }
                     } else if (configuration && port_row->aclv4_in_cfg) {
-                        print_acl_apply_commands("interface", port_row->name, "in", port_row->aclv4_in_cfg);
-                        if (!aces_cur_cfg_mismatch && !aces_cur_cfg_equal(port_row->aclv4_in_cfg)) {
-                            aces_cur_cfg_mismatch = true;
+                        if (port_row->aclv4_in_applied != port_row->aclv4_in_cfg) {
+                            print_acl_mismatch_warning(port_row->aclv4_in_cfg->name, commands);
                         }
-                    }
-                    if (!applied_cfg_mismatch && (port_row->aclv4_in_applied != port_row->aclv4_in_cfg)) {
-                        applied_cfg_mismatch = true;
+                        print_acl_apply_commands("interface", port_row->name, "in", port_row->aclv4_in_cfg);
                     }
                 }
                 OVSREC_VLAN_FOR_EACH(vlan_row, idl) {
                     sprintf(vlan_id_str, "%" PRId64, vlan_row->id);
                     if (!configuration && vlan_row->aclv4_in_applied) {
+                        if (vlan_row->aclv4_in_applied != vlan_row->aclv4_in_cfg) {
+                            print_acl_mismatch_warning(vlan_row->aclv4_in_applied->name, commands);
+                        }
                         print_acl_apply_commands("vlan", vlan_id_str, "in", vlan_row->aclv4_in_applied);
-                        if (!aces_cur_cfg_mismatch && !aces_cur_cfg_equal(vlan_row->aclv4_in_applied)) {
-                            aces_cur_cfg_mismatch = true;
-                        }
                     } else if (configuration && vlan_row->aclv4_in_cfg) {
-                        print_acl_apply_commands("vlan", vlan_id_str, "in", vlan_row->aclv4_in_cfg);
-                        if (!aces_cur_cfg_mismatch && !aces_cur_cfg_equal(vlan_row->aclv4_in_cfg)) {
-                            aces_cur_cfg_mismatch = true;
+                        if (vlan_row->aclv4_in_applied != vlan_row->aclv4_in_cfg) {
+                            print_acl_mismatch_warning(vlan_row->aclv4_in_cfg->name, commands);
                         }
-                    }
-                    if (!applied_cfg_mismatch && (vlan_row->aclv4_in_applied != vlan_row->aclv4_in_cfg)) {
-                        applied_cfg_mismatch = true;
+                        print_acl_apply_commands("vlan", vlan_id_str, "in", vlan_row->aclv4_in_cfg);
                     }
                 }
             }
         }
-    }
-
-    /* Warn about mismatch of applied ACLs */
-    if (applied_cfg_mismatch) {
-        vty_out(vty, "%% Warning: user-specified access-list apply does not match active configuration%s", VTY_NEWLINE);
-    }
-    /* Warn about mismatch of ACL entries */
-    if (aces_cur_cfg_mismatch) {
-        vty_out(vty, "%% Warning: user-specified access-list entries do not match active configuration%s", VTY_NEWLINE);
     }
 
     return CMD_SUCCESS;

@@ -28,6 +28,10 @@
 #ifndef _ACCESS_LIST_VTY_OVSDB_UTIL_H
 #define _ACCESS_LIST_VTY_OVSDB_UTIL_H
 
+#define ACL_MISMATCH_WARNING "user configuration does not match active configuration."
+#define ACL_MISMATCH_HINT_SHOW "run 'show access-list [commands]' to display active access-list configuration."
+#define ACL_MISMATCH_HINT_RESET "run 'reset access-list all' to reset access-lists to match active configuration."
+
 /**
  * Look up an ACL by type + name
  *
@@ -161,12 +165,22 @@ void print_port_aclv4_in_statistics(const struct ovsrec_port *port_row);
 void print_vlan_aclv4_in_statistics(const struct ovsrec_vlan *vlan_row);
 
 /**
+ * Print a warning that the named ACL's user configuration doesn't match the
+ * active configuration.
+ *
+ * @param acl_name  ACL name string
+ * @param commands  non-null if warning should be printed as "config" comments
+ *                  (prefixed by ! characters)
+ */
+void print_acl_mismatch_warning(const char *acl_name, const char *commands);
+
+/**
  * Test whether an ACL's entries are equal
  *
  * @param  acl_row ACL to test
  *
  * @return         true if the ACL's entries are equal, false otherwise
  */
-bool aces_cur_cfg_equal (const struct ovsrec_acl *acl_row);
+bool aces_cur_cfg_equal(const struct ovsrec_acl *acl_row);
 
 #endif /* _ACCESS_LIST_VTY_OVSDB_UTIL_H */
