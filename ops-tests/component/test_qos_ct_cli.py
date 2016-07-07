@@ -24,7 +24,7 @@ import time
 
 from pytest import raises
 from topology_lib_vtysh.exceptions import IncompleteCommandException
-from topology_lib_vtysh.exceptions import TcamResourcesException
+from topology_lib_vtysh.exceptions import FailedCommandException
 from topology_lib_vtysh.exceptions import UnknownCommandException
 
 TOPOLOGY = """
@@ -211,7 +211,7 @@ def case_qosApplyGlobalCommandWithDuplicateQueueProfileQueue():
         ctx.map_queue_local_priority('2', '5')
         ctx.map_queue_local_priority('3', '4')
 
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.apply_qos_queue_profile_schedule_profile(
                 'DuplicateQueueProfileQueue', 'profile1')
@@ -227,7 +227,7 @@ def case_qosApplyGlobalCommandWithMissingQueueProfileQueue():
         ctx.map_queue_local_priority('2', '5')
         ctx.map_queue_local_priority('3', '4')
 
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.apply_qos_queue_profile_schedule_profile(
                 'MissingQueueProfileQueue', 'profile1')
@@ -243,13 +243,13 @@ def case_qosApplyGlobalCommandWithMissingScheduleProfileQueue():
         ctx.dwrr_queue_weight('2', '20')
         ctx.dwrr_queue_weight('3', '30')
 
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.apply_qos_queue_profile_schedule_profile(
                 'profile1', 'MissingScheduleProfileQueue')
 
 def case_qosApplyGlobalCommandWithIllegalQueueProfile():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.apply_qos_queue_profile_schedule_profile('p&^%$1', 'profile1')
 
@@ -259,12 +259,12 @@ def case_qosApplyGlobalCommandWithNullQueueProfile():
             ctx.apply_qos_queue_profile_schedule_profile('', 'profile1')
 
 def case_qosApplyGlobalCommandWithMissingQueueProfile():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.apply_qos_queue_profile_schedule_profile('missing', 'profile1')
 
 def case_qosApplyGlobalCommandWithIllegalScheduleProfile():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.apply_qos_queue_profile_schedule_profile('profile1', 'p&^%$1')
 
@@ -274,7 +274,7 @@ def case_qosApplyGlobalCommandWithNullScheduleProfile():
             ctx.apply_qos_queue_profile_schedule_profile('profile1', '')
 
 def case_qosApplyGlobalCommandWithMissingScheduleProfile():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.apply_qos_queue_profile_schedule_profile('profile1', 'missing')
 
@@ -324,13 +324,13 @@ def case_qosApplyGlobalCommandWithAllWrrWithMaxStrict():
     assert out['awwms']['profile_name'] == 'awwms'
 
 def case_qosApplyGlobalCommandWithHigherStrictLowerWrr():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.apply_qos_queue_profile_schedule_profile(
                 'profile1', 'HigherStrictLowerWrr')
 
 def case_qosApplyGlobalCommandWithLowerStrictHigherWrr():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.apply_qos_queue_profile_schedule_profile(
                 'profile1', 'LowerStrictHigherWrr')
@@ -370,7 +370,7 @@ def case_qosApplyGlobalCommandWithPortScheduleProfileWithDifferentQueues():
 
     # Globally applying the default profiles should fail, since they
     # have 8 queues rather than 1 queue.
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.apply_qos_queue_profile_schedule_profile('default', 'default')
 
@@ -423,12 +423,12 @@ def case_qosApplyPortCommandWithMissingScheduleProfileQueue():
         ctx.dwrr_queue_weight('2', '20')
         ctx.dwrr_queue_weight('3', '30')
 
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.ConfigInterface('1') as ctx:
             ctx.apply_qos_schedule_profile('MissingScheduleProfileQueue')
 
 def case_qosApplyPortCommandWithIllegalScheduleProfile():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.ConfigInterface('1') as ctx:
             ctx.apply_qos_schedule_profile('p&^%$1')
 
@@ -440,14 +440,14 @@ def case_qosApplyPortCommandWithNullScheduleProfile():
 def case_qosApplyPortCommandWithInterfaceInLag():
     with ops1.libs.vtysh.ConfigInterface('1') as ctx:
         ctx.lag('10')
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.ConfigInterface('1') as ctx:
             ctx.apply_qos_schedule_profile('profile1')
     with ops1.libs.vtysh.ConfigInterface('1') as ctx:
         ctx.no_lag('10')
 
 def case_qosApplyPortCommandWithMissingScheduleProfile():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.ConfigInterface('1') as ctx:
             ctx.apply_qos_schedule_profile('missing')
 
@@ -484,12 +484,12 @@ def case_qosApplyPortCommandWithAllWrrWithMaxStrict():
     assert out['awwms']['profile_name'] == 'awwms'
 
 def case_qosApplyPortCommandWithHigherStrictLowerWrr():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.ConfigInterface('1') as ctx:
             ctx.apply_qos_schedule_profile('HigherStrictLowerWrr')
 
 def case_qosApplyPortCommandWithLowerStrictHigherWrr():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.ConfigInterface('1') as ctx:
             ctx.apply_qos_schedule_profile('LowerStrictHigherWrr')
 
@@ -505,7 +505,7 @@ def case_qosApplyPortNoCommand():
 def case_qosApplyPortNoCommandWithInterfaceInLag():
     with ops1.libs.vtysh.ConfigInterface('1') as ctx:
         ctx.lag('10')
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.ConfigInterface('1') as ctx:
             ctx.no_apply_qos_schedule_profile()
     with ops1.libs.vtysh.ConfigInterface('1') as ctx:
@@ -583,12 +583,12 @@ def case_qosCosMapCommandWithNullColor():
                 '7', '2', '', 'MyName2')
 
 def case_qosCosMapCommandWithIllegalName():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.qos_cos_map_local_priority_color_name(
                 '7', '2', 'yellow', 'NameThatIsLongerThan64Characterssssssss'
                     'ssssssssssssssssssssssssss')
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.qos_cos_map_local_priority_color_name(
                 '7', '2', 'yellow', 'NameWithIllegalCh@r@cter$')
@@ -694,12 +694,12 @@ def case_qosDscpMapCommandWithNullColor():
                 '38', '2', '', 'MyName2')
 
 def case_qosDscpMapCommandWithIllegalName():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.qos_dscp_map_local_priority_color_name(
                 '38', '2', 'yellow', 'NameThatIsLongerThan64Characterssssssss'
                     'ssssssssssssssssssssssssss')
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.qos_dscp_map_local_priority_color_name(
                 '38', '2', 'yellow', 'NameWithIllegalCh@r@cter$')
@@ -751,7 +751,7 @@ def case_qosDscpPortCommandWithSystemTrustNoneAndPortTrustDscp():
         ctx.qos_trust('none')
     with ops1.libs.vtysh.ConfigInterface('1') as ctx:
         ctx.qos_trust('dscp')
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.ConfigInterface('1') as ctx:
             ctx.qos_dscp('1')
 
@@ -786,7 +786,7 @@ def case_qosDscpPortCommandWithSystemTrustDscpAndPortTrustMissing():
         ctx.qos_trust('dscp')
     with ops1.libs.vtysh.ConfigInterface('1') as ctx:
         ctx.no_qos_trust()
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.ConfigInterface('1') as ctx:
             ctx.qos_dscp('1')
 
@@ -816,7 +816,7 @@ def case_qosDscpPortCommandWithInterfaceInLag():
 
     with ops1.libs.vtysh.ConfigInterface('1') as ctx:
         ctx.lag('10')
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.ConfigInterface('1') as ctx:
             ctx.qos_dscp('1')
 
@@ -842,7 +842,7 @@ def case_qosDscpPortNoCommandWithInterfaceInLag():
 
     with ops1.libs.vtysh.ConfigInterface('1') as ctx:
         ctx.lag('10')
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.ConfigInterface('1') as ctx:
             ctx.no_qos_dscp()
 
@@ -858,12 +858,12 @@ def case_qosQueueProfileCommand():
     assert out['NewProfile']['profile_name'] == 'NewProfile'
 
 def case_qosQueueProfileCommandWithIllegalName():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.qos_queue_profile(
                 'NameThatIsLongerThan64Characterssssssssssssss'
                     'ssssssssssssssssssss')
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.qos_queue_profile(
                 'NameWithIllegalCh@r@cter$')
@@ -874,12 +874,12 @@ def case_qosQueueProfileCommandWithNullName():
             ctx.qos_queue_profile('')
 
 def case_qosQueueProfileCommandWithStrictName():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.qos_queue_profile('strict')
 
 def case_qosQueueProfileCommandWithAppliedProfile():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.qos_queue_profile('default')
 
@@ -896,12 +896,12 @@ def case_qosQueueProfileNoCommand():
     assert 'NewProfile' not in out
 
 def case_qosQueueProfileNoCommandWithIllegalName():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.no_qos_queue_profile(
                 'NameThatIsLongerThan64Characterssssssssssssss'
                     'ssssssssssssssssssss')
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.no_qos_queue_profile('NameWithIllegalCh@r@cter$')
 
@@ -911,17 +911,17 @@ def case_qosQueueProfileNoCommandWithNullName():
             ctx.no_qos_queue_profile('')
 
 def case_qosQueueProfileNoCommandWithStrictName():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.no_qos_queue_profile('strict')
 
 def case_qosQueueProfileNoCommandWithAppliedProfile():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.no_qos_queue_profile('default')
 
 def case_qosQueueProfileNoCommandWithNonExistentProfile():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.no_qos_queue_profile('NonExistent')
 
@@ -934,12 +934,12 @@ def case_qosQueueProfileNameCommand():
     assert out['0']['name'] == 'QueueName'
 
 def case_qosQueueProfileNameCommandWithIllegalName():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.ConfigQueueProfile('IllegalQueueName') as ctx:
             ctx.name_queue('0',
                 'NameThatIsLongerThan64Characterssssssssssssssss'
                     'ssssssssssssssssss')
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.ConfigQueueProfile('IllegalQueueName') as ctx:
             ctx.name_queue('0', 'NameWithIllegalCh@r@cter$')
 
@@ -987,7 +987,7 @@ def case_qosQueueProfileNameNoCommandWithNullQueue():
             ctx.no_name_queue('')
 
 def case_qosQueueProfileNameNoCommandWithMissingQueue():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.ConfigQueueProfile('IllegalQueue') as ctx:
             ctx.no_name_queue('7')
 
@@ -1118,7 +1118,7 @@ def case_qosQueueProfileMapNoCommandDeletesListOfPriorities():
     assert out['1']['name'] == ''
 
 def case_qosQueueProfileMapNoCommandWithMissingQueue():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.ConfigQueueProfile('MapIllegalQueue') as ctx:
             ctx.no_map_queue('7')
 
@@ -1131,12 +1131,12 @@ def case_qosScheduleProfileCommand():
     assert out['NewProfile']['profile_name'] == 'NewProfile'
 
 def case_qosScheduleProfileCommandWithIllegalName():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.qos_schedule_profile(
                 'NameThatIsLongerThan64Characterssssssssssssss'
                     'ssssssssssssssssssss')
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.qos_schedule_profile(
                 'NameWithIllegalCh@r@cter$')
@@ -1147,12 +1147,12 @@ def case_qosScheduleProfileCommandWithNullName():
             ctx.qos_schedule_profile('')
 
 def case_qosScheduleProfileCommandWithStrictName():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.qos_schedule_profile('strict')
 
 def case_qosScheduleProfileCommandWithAppliedProfile():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.qos_schedule_profile('default')
 
@@ -1169,12 +1169,12 @@ def case_qosScheduleProfileNoCommand():
     assert 'NewProfile' not in out
 
 def case_qosScheduleProfileNoCommandWithIllegalName():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.no_qos_schedule_profile(
                 'NameThatIsLongerThan64Characterssssssssssssss'
                     'ssssssssssssssssssss')
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.no_qos_schedule_profile('NameWithIllegalCh@r@cter$')
 
@@ -1184,17 +1184,17 @@ def case_qosScheduleProfileNoCommandWithNullName():
             ctx.no_qos_schedule_profile('')
 
 def case_qosScheduleProfileNoCommandWithStrictName():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.no_qos_schedule_profile('strict')
 
 def case_qosScheduleProfileNoCommandWithAppliedProfile():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.no_qos_schedule_profile('default')
 
 def case_qosScheduleProfileNoCommandWithNonExistentProfile():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.no_qos_schedule_profile('NonExistent')
 
@@ -1244,7 +1244,7 @@ def case_qosScheduleProfileStrictNoCommandWithNullQueue():
             ctx.no_strict_queue('')
 
 def case_qosScheduleProfileStrictNoCommandWithMissingQueue():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.ConfigScheduleProfile('IllegalQueue') as ctx:
             ctx.no_strict_queue('7')
 
@@ -1307,7 +1307,7 @@ def case_qosScheduleProfileWrrNoCommandWithNullQueue():
             ctx.no_dwrr_queue('')
 
 def case_qosScheduleProfileWrrNoCommandWithMissingQueue():
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.ConfigScheduleProfile('IllegalQueue') as ctx:
             ctx.no_dwrr_queue('7')
 
@@ -1358,7 +1358,7 @@ def case_qosTrustPortCommandWithNullQosTrust():
 def case_qosTrustPortCommandWithInterfaceInLag():
     with ops1.libs.vtysh.ConfigInterface('1') as ctx:
         ctx.lag('10')
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.ConfigInterface('1') as ctx:
             ctx.qos_trust('cos')
     with ops1.libs.vtysh.ConfigInterface('1') as ctx:
@@ -1375,7 +1375,7 @@ def case_qosTrustPortNoCommand():
 def case_qosTrustPortNoCommandWithInterfaceInLag():
     with ops1.libs.vtysh.ConfigInterface('1') as ctx:
         ctx.lag('10')
-    with raises(TcamResourcesException):
+    with raises(FailedCommandException):
         with ops1.libs.vtysh.ConfigInterface('1') as ctx:
             ctx.no_qos_trust()
     with ops1.libs.vtysh.ConfigInterface('1') as ctx:

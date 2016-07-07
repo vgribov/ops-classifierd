@@ -24,7 +24,6 @@ import time
 
 from pytest import raises
 from topology_lib_vtysh.exceptions import IncompleteCommandException
-from topology_lib_vtysh.exceptions import TcamResourcesException
 from topology_lib_vtysh.exceptions import UnknownCommandException
 
 TOPOLOGY = """

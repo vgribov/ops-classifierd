@@ -23,7 +23,6 @@ import time
 import syslog
 from pytest import raises
 from topology_lib_vtysh.exceptions import UnknownVtyshException
-from topology_lib_vtysh.exceptions import TcamResourcesException
 
 TOPOLOGY = """
 # +-------+
