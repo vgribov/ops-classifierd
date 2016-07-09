@@ -167,6 +167,9 @@ main(int argc, char *argv[])
 
     /* Parse commandline args and get the name of the OVSDB socket. */
     ovsdb_sock = parse_options(argc, argv, &appctl_path);
+    if (ovsdb_sock == NULL) {
+        exit(EXIT_FAILURE);
+    }
 
     /* Initialize the metadata for the IDL cache. */
     ovsrec_init();

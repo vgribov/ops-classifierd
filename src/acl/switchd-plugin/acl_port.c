@@ -205,97 +205,90 @@ acl_port_map_update_cfg_internal(struct acl_port_map *acl_port_map,
     const struct ovsrec_acl *ovsdb_acl =
         acl_db_util_get_cfg(acl_port_map->acl_db, acl_port_map->parent->ovsdb_row);
     if (!ovsdb_acl) {
-        acl = NULL;
-        if (acl_port_map->hw_acl) {
-            rc = call_ofproto_ops_cls_remove(acl_port_map->hw_acl,
-                                             port,
-                                             ofproto,
-                                             &interface_info,
-                                             acl_port_map->acl_db->direction,
-                                             &status);
-            method_called =  OPS_CLS_STATUS_MSG_OP_REMOVE_STR;
-        } else {
-            /* Nothing to delete in PD for this ACL_PORT_MAP */
-        }
-    } else {
-        acl  = acl_lookup_by_uuid(&ovsdb_acl->header_.uuid);
-        if (!acl) {
-            /* This shouldn't happen because we currently process ACL
-             * row changes before Port row changes. But once the
-             * Change system is in place this really becomes
-             * impossible. Changes will have dependencies and can
-             * be reordered.
-             */
-            ovs_assert(0);
-        }
-        if (acl_port_map->hw_acl == acl) {
-            /* Perform clear statistics if clear requested id and clear
-             * performed id are different
-             */
-             clear_req_id = acl_db_util_get_clear_statistics_requested(
-                                            acl_port_map->acl_db,
-                                            acl_port_map->parent->ovsdb_row);
-             clear_performed_id = acl_db_util_get_clear_statistics_performed(
-                                            acl_port_map->acl_db,
-                                            acl_port_map->parent->ovsdb_row);
-            if (clear_req_id != clear_performed_id) {
-                /* Call ASIC layer to clear statistics.
-                 * This field is set from UI when clear stats is requested.
-                 * We call ASIC layer to clear statistics and mark the
-                 * operation done by setting
-                 * aclv4_in_statistics_clear_performed column regardless of
-                 * result of the call.The UI is expected to look at this
-                 * column and reset the aclv4_in_statistics_clear_requested
-                 * column. We will then detect that the flag is reset and
-                 * reset our flag marking completion of the request/response
-                 * cycle
-                 */
-                VLOG_DBG("ACL_PORT_MAP %s:%s:%s clearing statistics\n",
-                         acl_port_map->parent->port->name,
-                         ops_cls_type_strings[acl_port_map->acl_db->type],
-                         ops_cls_direction_strings[
-                                            acl_port_map->acl_db->direction]);
-                rc = call_ofproto_ops_cls_statistics_clear(
-                                                    acl_port_map->hw_acl,
-                                                    acl_port_map->parent->port,
-                                                    ofproto,
-                                                    &interface_info,
-                                                    acl_port_map->acl_db->direction,
-                                                    &list_status);
-                acl_log_handle_clear_stats(ovsdb_acl);
-                acl_port_map_stats_get(acl_port_map, ofproto);
-                method_called = OPS_CLS_STATUS_MSG_OP_CLEAR_STR;
+        /* The cfg being null means that acl_port_cfg_delete should have been
+         * called instead of this function.
+         */
+        ovs_assert(0);
+    }
 
-            }
-        } else if (!acl_port_map->hw_acl) {
-            VLOG_DBG("ACL_PORT_MAP %s:%s:%s applying %s",
+    acl  = acl_lookup_by_uuid(&ovsdb_acl->header_.uuid);
+    if (!acl) {
+        /* This shouldn't happen because we currently process ACL
+         * row changes before Port row changes. But once the
+         * Change system is in place this really becomes
+         * impossible. Changes will have dependencies and can
+         * be reordered.
+         */
+         ovs_assert(0);
+    }
+
+    if (acl_port_map->hw_acl == acl) {
+        /* Perform clear statistics if clear requested id and clear
+         * performed id are different
+         */
+         clear_req_id = acl_db_util_get_clear_statistics_requested(
+                                        acl_port_map->acl_db,
+                                        acl_port_map->parent->ovsdb_row);
+         clear_performed_id = acl_db_util_get_clear_statistics_performed(
+                                        acl_port_map->acl_db,
+                                        acl_port_map->parent->ovsdb_row);
+        if (clear_req_id != clear_performed_id) {
+            /* Call ASIC layer to clear statistics.
+             * This field is set from UI when clear stats is requested.
+             * We call ASIC layer to clear statistics and mark the
+             * operation done by setting
+             * aclv4_in_statistics_clear_performed column regardless of
+             * result of the call.The UI is expected to look at this
+             * column and reset the aclv4_in_statistics_clear_requested
+             * column. We will then detect that the flag is reset and
+             * reset our flag marking completion of the request/response
+             * cycle
+             */
+            VLOG_DBG("ACL_PORT_MAP %s:%s:%s clearing statistics\n",
                      acl_port_map->parent->port->name,
                      ops_cls_type_strings[acl_port_map->acl_db->type],
-                     ops_cls_direction_strings[acl_port_map->acl_db->direction],
-                     acl->name);
-            rc = call_ofproto_ops_cls_apply(acl,
-                                            port,
-                                            ofproto,
-                                            &interface_info,
-                                            acl_port_map->acl_db->direction,
-                                            &status);
-            method_called = OPS_CLS_STATUS_MSG_OP_APPLY_STR;
-        } else {
-            VLOG_DBG("ACL_PORT_MAP %s:%s:%s replacing %s with %s",
-                     acl_port_map->parent->port->name,
-                     ops_cls_type_strings[acl_port_map->acl_db->type],
-                     ops_cls_direction_strings[acl_port_map->acl_db->direction],
-                     acl_port_map->hw_acl->name,
-                     acl->name);
-            rc = call_ofproto_ops_cls_replace(acl_port_map->hw_acl,
-                                              acl,
-                                              port,
-                                              ofproto,
-                                              &interface_info,
-                                              acl_port_map->acl_db->direction,
-                                              &status);
-            method_called = OPS_CLS_STATUS_MSG_OP_REPLACE_STR;
+                     ops_cls_direction_strings[
+                                        acl_port_map->acl_db->direction]);
+            rc = call_ofproto_ops_cls_statistics_clear(
+                                                acl_port_map->hw_acl,
+                                                acl_port_map->parent->port,
+                                                ofproto,
+                                                &interface_info,
+                                                acl_port_map->acl_db->direction,
+                                                &list_status);
+            acl_log_handle_clear_stats(ovsdb_acl);
+            acl_port_map_stats_get(acl_port_map, ofproto);
+            method_called = OPS_CLS_STATUS_MSG_OP_CLEAR_STR;
+
         }
+    } else if (!acl_port_map->hw_acl) {
+        VLOG_DBG("ACL_PORT_MAP %s:%s:%s applying %s",
+                 acl_port_map->parent->port->name,
+                 ops_cls_type_strings[acl_port_map->acl_db->type],
+                 ops_cls_direction_strings[acl_port_map->acl_db->direction],
+                 acl->name);
+        rc = call_ofproto_ops_cls_apply(acl,
+                                        port,
+                                        ofproto,
+                                        &interface_info,
+                                        acl_port_map->acl_db->direction,
+                                        &status);
+        method_called = OPS_CLS_STATUS_MSG_OP_APPLY_STR;
+    } else {
+        VLOG_DBG("ACL_PORT_MAP %s:%s:%s replacing %s with %s",
+                 acl_port_map->parent->port->name,
+                 ops_cls_type_strings[acl_port_map->acl_db->type],
+                 ops_cls_direction_strings[acl_port_map->acl_db->direction],
+                 acl_port_map->hw_acl->name,
+                 acl->name);
+        rc = call_ofproto_ops_cls_replace(acl_port_map->hw_acl,
+                                          acl,
+                                          port,
+                                          ofproto,
+                                          &interface_info,
+                                          acl_port_map->acl_db->direction,
+                                          &status);
+        method_called = OPS_CLS_STATUS_MSG_OP_REPLACE_STR;
     }
 
     if (method_called == NULL) {
@@ -820,7 +813,7 @@ void acl_callback_port_delete(struct blk_params *blk_params)
 void
 acl_port_unapply_if_needed(struct acl *acl)
 {
-    struct acl_port_map *port, *next;
+    struct acl_port_map *port, *next = NULL;
 
     if (list_is_empty(&acl->acl_port_map)) {
         return;
