@@ -17,7 +17,7 @@
 
 import re
 
-import pytest
+from pytest import mark, fixture
 from copy import deepcopy
 import time
 import syslog
@@ -52,7 +52,7 @@ testInitialSleep = 1
 testRetryLimit = 90
 testRetrySleep = 1
 
-@pytest.fixture(scope="module")
+@fixture(scope="module")
 def setup(topology):
     global ops1
     ops1 = topology.get("ops1")
@@ -493,6 +493,7 @@ def case_22_add_mirror_non_system_interface_fails():
         ctx.vlan_access("1")
         ctx.vlan_trunk_allowed("1")
 
+@mark.gate
 def test_mirror_ct_cli(topology, setup):
     case_1_activate_ms_foo_succeeds()
     case_2_add_second_source_to_active_mirror_session_foo_succeeds()

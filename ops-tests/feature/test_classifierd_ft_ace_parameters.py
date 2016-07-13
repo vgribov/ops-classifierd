@@ -19,9 +19,8 @@
 OpenSwitch Test for adding ACL entries.
 """
 
-from pytest import mark
+from pytest import mark, raises
 from re import search
-import pytest
 from topology_lib_vtysh import exceptions
 import time
 
@@ -37,6 +36,7 @@ TOPOLOGY = """
 """
 
 
+@mark.gate
 @mark.test_id(10402)
 def test_ace_parameters(topology, step):
     step('################ Introduce delay in ACE ###########')
@@ -107,7 +107,7 @@ def test_ace_parameters(topology, step):
     step('################ to interface ###############')
     step('################ ACL does not exist ###############')
 
-    with pytest.raises(exceptions.AclDoesNotExistException):
+    with raises(exceptions.AclDoesNotExistException):
         with ops1.libs.vtysh.ConfigInterface('4') as ctx:
             ctx.apply_access_list_ip_in('test4')
 
@@ -214,7 +214,7 @@ def test_ace_parameters(topology, step):
     step('################ T8 Add ACE sctp ###########')
     step('################ invalid L4 src port ###############')
 
-    with pytest.raises(exceptions.UnknownCommandException):
+    with raises(exceptions.UnknownCommandException):
         with ops1.libs.vtysh.ConfigAccessListIpTestname('test1') as ctx:
             ctx.permit(
                 '',
@@ -243,7 +243,7 @@ def test_ace_parameters(topology, step):
     step('################ T10 Add ACE sctp ###########')
     step('################ invalid L4 dst port ###############')
 
-    with pytest.raises(exceptions.UnknownCommandException):
+    with raises(exceptions.UnknownCommandException):
         with ops1.libs.vtysh.ConfigAccessListIpTestname('test1') as ctx:
             ctx.permit(
                 '',
@@ -254,7 +254,7 @@ def test_ace_parameters(topology, step):
     step('################ range min,max port ###############')
     step('################ ECHO WORKAROUND ###############')
 
-    with pytest.raises(exceptions.EchoCommandException):
+    with raises(exceptions.EchoCommandException):
         with ops1.libs.vtysh.ConfigAccessListIpTestname('test11') as ctx:
             ctx.permit(
                 '',
@@ -273,7 +273,7 @@ def test_ace_parameters(topology, step):
 
     step('################ T12 Add ACE sctp ###########')
     step('################ range min,max port ###############')
-    with pytest.raises(
+    with raises(
             exceptions.InvalidL4SourcePortRangeException):
         with ops1.libs.vtysh.ConfigAccessListIpTestname('test12') as ctx:
             ctx.permit(
@@ -294,7 +294,7 @@ def test_ace_parameters(topology, step):
     step('################ T12 Add ACE sctp ###########')
     step('################ range min,max port ###############')
 
-    with pytest.raises(
+    with raises(
             exceptions.InvalidL4SourcePortRangeException):
         with ops1.libs.vtysh.ConfigAccessListIpTestname('test12') as ctx:
             ctx.permit(
@@ -305,7 +305,7 @@ def test_ace_parameters(topology, step):
     step('################ T13 Add ACE sctp ###########')
     step('################ invalid prefix ###############')
 
-    with pytest.raises(exceptions.UnknownCommandException):
+    with raises(exceptions.UnknownCommandException):
         with ops1.libs.vtysh.ConfigAccessListIpTestname('test13') as ctx:
             ctx.permit(
                 '',
@@ -325,7 +325,7 @@ def test_ace_parameters(topology, step):
     step('################ T14 Add ACE sctp ###########')
     step('################ invalid subnet mask ###############')
 
-    with pytest.raises(exceptions.UnknownCommandException):
+    with raises(exceptions.UnknownCommandException):
         with ops1.libs.vtysh.ConfigAccessListIpTestname('test14') as ctx:
             ctx.permit(
                 '',
@@ -335,7 +335,7 @@ def test_ace_parameters(topology, step):
     step('################ T15 Add ACE ###########')
     step('################ invalid numeric proto ###############')
 
-    with pytest.raises(exceptions.UnknownCommandException):
+    with raises(exceptions.UnknownCommandException):
         with ops1.libs.vtysh.ConfigAccessListIpTestname('test15') as ctx:
             ctx.permit(
                 '',
@@ -345,7 +345,7 @@ def test_ace_parameters(topology, step):
     step('################ T16 Add ACE ###########')
     step('################ unsupported proto ###############')
 
-    with pytest.raises(exceptions.UnknownCommandException):
+    with raises(exceptions.UnknownCommandException):
         with ops1.libs.vtysh.ConfigAccessListIpTestname('test16') as ctx:
             ctx.permit(
                 '',
@@ -357,7 +357,7 @@ def test_ace_parameters(topology, step):
     step('################ Command success. ###############')
 
     # TODO: Change exception library then add as negative test
-    # with pytest.raises(exceptions.TcamResourcesException):
+    # with raises(exceptions.TcamResourcesException):
     # with ops1.libs.vtysh.ConfigAccessListIpTestname('test17') as ctx:
     #     for i in range(1, 513):
     #         ctx.deny(
@@ -392,7 +392,7 @@ def test_ace_parameters(topology, step):
     step('################ Negative Test###############')
 
     # TODO: Change Exception library to proper exception
-    # with pytest.raises(
+    # with raises(
     #             exceptions.ResequenceNumberException):
     #         with ops1.libs.vtysh.Configure() as ctx:
     #             ctx.access_list_ip_resequence('test18', '500', '10')
@@ -420,7 +420,7 @@ def test_ace_parameters(topology, step):
     step('################ T21 Remove ACE ###########')
     step('################ Negative Test ###############')
 
-    with pytest.raises(exceptions.AceDoesNotExistException):
+    with raises(exceptions.AceDoesNotExistException):
         with ops1.libs.vtysh.ConfigAccessListIpTestname('test18') as ctx:
             ctx.no('4101')
 

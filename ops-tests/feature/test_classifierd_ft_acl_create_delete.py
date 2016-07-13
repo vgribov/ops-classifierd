@@ -19,9 +19,8 @@
 OpenSwitch Test for acl create, delete configuration.
 """
 
-from pytest import mark
+from pytest import mark, raises
 from re import search
-import pytest
 from topology_lib_vtysh import exceptions
 
 TOPOLOGY = """
@@ -36,6 +35,7 @@ TOPOLOGY = """
 """
 
 
+@mark.gate
 @mark.test_id(10401)
 def test_acl_create_delete(topology, step):
     """
@@ -484,7 +484,7 @@ def test_acl_create_delete(topology, step):
 
     step('#################### access-list create ACL ####################')
     step('################ with name contains invalid char ###############')
-    with pytest.raises(exceptions.UnknownCommandException):
+    with raises(exceptions.UnknownCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.access_list_ip('te st!$')
 
@@ -512,7 +512,7 @@ def test_acl_create_delete(topology, step):
     step('################ access-list create ACL ###############')
     step('################ with no name ###############')
 
-    with pytest.raises(
+    with raises(
             exceptions.IncompleteCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.access_list_ip(' ')
@@ -530,7 +530,7 @@ def test_acl_create_delete(topology, step):
                 'namegreaterthanmaximumallowedlengthshallberejected'
               )
 
-    with pytest.raises(exceptions.UnknownCommandException):
+    with raises(exceptions.UnknownCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.access_list_ip('%s' % longstr)
 
@@ -580,7 +580,7 @@ def test_acl_create_delete(topology, step):
                                      ), test1_result
     )
 
-    with pytest.raises(exceptions.AclEmptyException):
+    with raises(exceptions.AclEmptyException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.access_list_ip_resequence('test1', 1, 10)
 
@@ -595,6 +595,6 @@ def test_acl_create_delete(topology, step):
     step('##################### Modify empty ACL ####################')
     step('############# with invalid resequence number ##############')
 
-    with pytest.raises(exceptions.UnknownCommandException):
+    with raises(exceptions.UnknownCommandException):
         with ops1.libs.vtysh.Configure() as ctx:
             ctx.access_list_ip_resequence('test1', 0, 10)

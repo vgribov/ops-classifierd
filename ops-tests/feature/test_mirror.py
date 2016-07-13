@@ -255,6 +255,7 @@ def pingandsniff(onoff, topology):
 
 
 # Mirror Test
+@mark.gate
 @mark.test_id(10300)
 @mark.platform_incompatible(['ostl'])
 def test_mirror(topology):

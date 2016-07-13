@@ -17,7 +17,7 @@
 
 import re
 
-import pytest
+from pytest import mark, fixture
 from copy import deepcopy
 import time
 
@@ -46,7 +46,7 @@ p3 = None
 p4 = None
 switch_ip = None
 
-@pytest.fixture(scope="module")
+@fixture(scope="module")
 def setup(topology):
     global ops1
     ops1 = topology.get("ops1")
@@ -610,6 +610,7 @@ def case_add_active_mirror_foo_empty_lag_fails():
 
     rest_get_fails(mirror_name)
 
+@mark.gate
 def test_mirror_ct_rest_custom_validators(topology, setup):
     case_1_activate_ms_foo_succeeds()
     case_2_add_second_source_to_active_ms_foo_succeeds()

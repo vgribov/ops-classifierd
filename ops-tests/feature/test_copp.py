@@ -207,6 +207,7 @@ def getstatsvalue(coppstatsresp, classtype, field, unsuppresponseval=-1):
     return -2
 
 
+@mark.gate
 @mark.test_id(10450)
 def test_copp_stats(topology):
     """
