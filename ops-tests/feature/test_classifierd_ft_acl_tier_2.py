@@ -37,14 +37,21 @@ Test15: acl_modify_after_sending_udp_traffic
 Test16: acl_deny_udp_on_multiple_ports
 Test17: acl_permit_icmp_on_multiple_ports
 Test18: acl_replace_with_icmp_traffic
+Test19: acl_permit_any_hs1_hs2_hitcount
+Test20: test_acl_permit_any_hs1_hs2_config_persistence_ten_entries
+Test21: test_acl_permit_any_hs1_hs2_config_persistence_300_entries
+Test22: test_acl_permit_any_hs1_hs2_config_persistence_150x2_entries
 """
 
 from pytest import mark
+from pytest import fixture
 from re import findall
 from re import search
+from itertools import product
 from topology_lib_scapy.library import ScapyThread
 from topology_lib_scapy.library import send_traffic
 from topology_lib_scapy.library import sniff_traffic
+from datetime import datetime
 
 
 from time import sleep
@@ -70,24 +77,97 @@ hs1:1 -- ops1:1
 ops1:2 -- hs2:1
 """
 
-filter_udp = 'udp and port 48621 and ip src 1.1.1.1 and ip dst 1.1.1.2'
-filter_udp_other = 'udp and port 5555 and ip src 1.1.1.1 and ip dst 1.1.1.2'
-filter_icmp = 'icmp and ip src 1.1.1.1 and ip dst 1.1.1.2'
-filter_udp_reverse = 'udp and port 48621 and ip src 1.1.1.2 and ip dst 1.1.1.1'
-filter_icmp_reverse = 'icmp and ip src 1.1.1.2 and ip dst 1.1.1.1'
+filter_udp = "lambda p: UDP in p and p[UDP].dport == 48621 and " \
+    "p[IP].src == '1.1.1.1' and p[IP].dst == '1.1.1.2'"
+filter_udp_other = "lambda p: UDP in p and p[UDP].dport == 5555 and " \
+    "p[IP].src == '1.1.1.1' and p[IP].dst == '1.1.1.2'"
+filter_icmp = "lambda p: ICMP in p and p[IP].src == '1.1.1.1' " \
+    " and p[IP].dst == '1.1.1.2'"
+filter_udp_reverse = "lambda p: UDP in p and p[UDP].dport == 48621 and " \
+    "p[IP].src == '1.1.1.2' and p[IP].src == '1.1.1.1'"
+filter_icmp_reverse = "lambda p: ICMP in p and p[IP].src == '1.1.1.2' and " \
+    "p[IP].dst == '1.1.1.1'"
 port_str = '1'
 timeout = 25
 count = 10
+filter_str = (
+                "lambda p: ICMP in p and p[IP].src == '1.1.1.1' "
+                "and p[IP].dst == '1.1.1.2'"
+            )
+
+
+@fixture(scope='module')
+def configure_acl_test(request, topology):
+    ops1 = topology.get('ops1')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert ops1 is not None
+    assert hs1 is not None
+    assert hs2 is not None
+
+    p1 = ops1.ports['1']
+    p2 = ops1.ports['2']
+
+    # Mark interfaces as enabled
+    assert not ops1(
+        'set interface {p1} user_config:admin=up'.format(**locals()),
+        shell='vsctl'
+    )
+    assert not ops1(
+        'set interface {p2} user_config:admin=up'.format(**locals()),
+        shell='vsctl'
+    )
+
+    # Configure interfaces
+    with ops1.libs.vtysh.ConfigInterface('1') as ctx:
+        ctx.no_routing()
+        ctx.no_shutdown()
+
+    with ops1.libs.vtysh.ConfigInterface('2') as ctx:
+        ctx.no_routing()
+        ctx.no_shutdown()
+
+    ops1('show interface {p1}'.format(**locals()))
+    ops1('show interface {p2}'.format(**locals()))
+
+    hs1.send_command('service network-manager stop', shell='bash')
+    hs2.send_command('service network-manager stop', shell='bash')
+
+    hs1.libs.ip.interface('1', addr='1.1.1.1/24', up=True)
+    hs2.libs.ip.interface('1', addr='1.1.1.2/24', up=True)
+
+    with ops1.libs.vtysh.ConfigVlan('100') as ctx:
+        ctx.no_shutdown()
+
+    with ops1.libs.vtysh.ConfigInterface('1') as ctx:
+        ctx.vlan_access(100)
+
+    with ops1.libs.vtysh.ConfigInterface('2') as ctx:
+        ctx.vlan_access(100)
+
+    for portlbl in ['1', '2']:
+        wait_until_interface_up(ops1, portlbl)
+
+    ping = hs2.libs.ping.ping(1, '1.1.1.1')
+    print(ping)
+
+    hs1.libs.scapy.start_scapy()
+    hs2.libs.scapy.start_scapy()
 
 
 def configure_permit_acl(ops1, name, seq_num, proto, src_ip,
-                         src_port, dst_ip, dst_port):
+                         src_port, dst_ip, dst_port, count_str):
     """
     Configure an ACL with one permit rule
     """
 
     with ops1.libs.vtysh.ConfigAccessListIpTestname(name) as ctx:
-        ctx.permit('', seq_num, proto, src_ip, src_port, dst_ip, dst_port)
+        ctx.permit(
+                  '',
+                  seq_num, proto, src_ip, src_port,
+                  dst_ip, dst_port, count_str
+                  )
 
 
 def configure_deny_acl(ops1, name, seq_num, proto, src_ip,
@@ -100,7 +180,8 @@ def configure_deny_acl(ops1, name, seq_num, proto, src_ip,
         ctx.deny('', seq_num, proto, src_ip, src_port, dst_ip, dst_port)
 
 
-def acl_permit_udp_any_any(ops1, hs1, hs2, topology, step):
+@mark.platform_incompatible(['docker'])
+def test_acl_permit_udp_any_any(configure_acl_test, topology, step):
     """
     This test adds a "1 permit udp any any" rule on interface 1.
     It then sends 10 UDP packets from hs1 to hs2 and verifies that
@@ -108,8 +189,16 @@ def acl_permit_udp_any_any(ops1, hs1, hs2, topology, step):
     """
     global filter_udp, timeout, count, port_str
 
+    ops1 = topology.get('ops1')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert ops1 is not None
+    assert hs1 is not None
+    assert hs2 is not None
+
     step('1.a Configure an ACL with 1 permit udp any any rule')
-    configure_permit_acl(ops1, 'test', '1', 'udp', 'any', '', 'any', '')
+    configure_permit_acl(ops1, 'test', '1', 'udp', 'any', '', 'any', '', '')
     test1_result = ops1('show run')
 
     assert search(
@@ -176,13 +265,22 @@ def acl_permit_udp_any_any(ops1, hs1, hs2, topology, step):
     )
 
 
-def acl_deny_udp_any_any(ops1, hs1, hs2, topology, step):
+@mark.platform_incompatible(['docker'])
+def test_acl_deny_udp_any_any(configure_acl_test, topology, step):
     """
     This test adds a "1 deny udp any any" rule on interface 1.
     It then sends 10 UDP packets from hs1 to hs2 and verifies that
     10 UDP packets are received on hs2
     """
     global filter_udp, timeout, count, port_str
+
+    ops1 = topology.get('ops1')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert ops1 is not None
+    assert hs1 is not None
+    assert hs2 is not None
 
     step('2.a Configure an ACL with 1 deny udp any any rule')
     configure_deny_acl(ops1, 'test', '1', 'udp', 'any', '', 'any', '')
@@ -252,7 +350,8 @@ def acl_deny_udp_any_any(ops1, hs1, hs2, topology, step):
     )
 
 
-def acl_permit_udp_hs1_hs2(ops1, hs1, hs2, topology, step):
+@mark.platform_incompatible(['docker'])
+def test_acl_permit_udp_hs1_hs2(configure_acl_test, topology, step):
     """
     This test adds a "1 permit udp 1.1.1.1 1.1.1.2" rule on interface 1.
     It then sends 10 UDP packets from hs1 to hs2 and verifies that
@@ -261,9 +360,17 @@ def acl_permit_udp_hs1_hs2(ops1, hs1, hs2, topology, step):
     """
     global filter_udp, filter_icmp, timeout, count, port_str
 
+    ops1 = topology.get('ops1')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert ops1 is not None
+    assert hs1 is not None
+    assert hs2 is not None
+
     step('3.a Configure an ACL with 1 permit udp 1.1.1.1 1.1.1.2 rule')
     configure_permit_acl(ops1, 'test', '1', 'udp', '1.1.1.1', '', '1.1.1.2',
-                         '')
+                         '', '')
     test1_result = ops1('show run')
 
     assert search(
@@ -357,7 +464,8 @@ def acl_permit_udp_hs1_hs2(ops1, hs1, hs2, topology, step):
     )
 
 
-def acl_deny_udp_hs1_hs2(ops1, hs1, hs2, topology, step):
+@mark.platform_incompatible(['docker'])
+def test_acl_deny_udp_hs1_hs2(configure_acl_test, topology, step):
     """
     This test adds a "1 deny udp 1.1.1.1 1.1.1.2" rule on interface 1.
     It then passes 10 UDP packets from hs1 to hs2 and verifies that
@@ -365,6 +473,14 @@ def acl_deny_udp_hs1_hs2(ops1, hs1, hs2, topology, step):
     protocol traffic is received by hs2 by sending 10 ICMP packets.
     """
     global filter_udp, filter_icmp, timeout, count, port_str
+
+    ops1 = topology.get('ops1')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert ops1 is not None
+    assert hs1 is not None
+    assert hs2 is not None
 
     step('4.a Configure an ACL with 1 deny udp 1.1.1.1 1.1.1.2 rule')
     configure_deny_acl(
@@ -462,7 +578,8 @@ def acl_deny_udp_hs1_hs2(ops1, hs1, hs2, topology, step):
     )
 
 
-def acl_permit_udp_prefix_len_mask(ops1, hs1, hs2, topology, step):
+@mark.platform_incompatible(['docker'])
+def test_acl_permit_udp_prefix_len_mask(configure_acl_test, topology, step):
     """
     This test adds a "1 permit udp 1.1.1.0/31 1.1.1.0/30" rule on interface 1.
     It then passes 10 UDP packets from hs1 to hs2 and verifies that
@@ -471,10 +588,18 @@ def acl_permit_udp_prefix_len_mask(ops1, hs1, hs2, topology, step):
     """
     global filter_udp, filter_icmp, timeout, count, port_str
 
+    ops1 = topology.get('ops1')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert ops1 is not None
+    assert hs1 is not None
+    assert hs2 is not None
+
     step('5.a Configure an ACL with 1 permit udp 1.1.1.0/31 1.1.1.0/30 rule')
     configure_permit_acl(ops1, 'test', '1', 'udp', '1.1.1.0/31', '',
                          '1.1.1.0/30',
-                         '')
+                         '', '')
     test1_result = ops1('show run')
 
     assert search(
@@ -569,7 +694,8 @@ def acl_permit_udp_prefix_len_mask(ops1, hs1, hs2, topology, step):
     )
 
 
-def acl_deny_udp_prefix_len_mask(ops1, hs1, hs2, topology, step):
+@mark.platform_incompatible(['docker'])
+def test_acl_deny_udp_prefix_len_mask(configure_acl_test, topology, step):
     """
     This test adds a "1 permit udp 1.1.1.0/31 1.1.1.0/30" rule on interface 1.
     It then passes 10 UDP packets from hs1 to hs2 and verifies that
@@ -577,6 +703,14 @@ def acl_deny_udp_prefix_len_mask(ops1, hs1, hs2, topology, step):
     protocol traffic is not received by hs2 by sending 10 ICMP packets.
     """
     global filter_udp, filter_icmp, timeout, count, port_str
+
+    ops1 = topology.get('ops1')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert ops1 is not None
+    assert hs1 is not None
+    assert hs2 is not None
 
     step('6.a Configure an ACL with 1 deny udp 1.1.1.0/31 1.1.1.0/30 rule')
     configure_deny_acl(ops1, 'test', '1', 'udp', '1.1.1.0/31', '',
@@ -676,7 +810,8 @@ def acl_deny_udp_prefix_len_mask(ops1, hs1, hs2, topology, step):
     )
 
 
-def acl_permit_udp_dotted_netmask(ops1, hs1, hs2, topology, step):
+@mark.platform_incompatible(['docker'])
+def test_acl_permit_udp_dotted_netmask(configure_acl_test, topology, step):
     """
     This test adds a "1 permit udp 1.1.1.0/255.255.255.254
     1.1.1.0/255.255.255.252" rule on interface 1.
@@ -686,11 +821,19 @@ def acl_permit_udp_dotted_netmask(ops1, hs1, hs2, topology, step):
     """
     global filter_udp, filter_icmp, timeout, count, port_str
 
+    ops1 = topology.get('ops1')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert ops1 is not None
+    assert hs1 is not None
+    assert hs2 is not None
+
     step('7.a Configure an ACL with 1 permit udp 1.1.1.0/255.255.255.254'
          ' 1.1.1.0/255.255.255.252 rule')
     configure_permit_acl(
         ops1, 'test', '1', 'udp', 'any', '',
-        '1.1.1.0/255.255.255.252', '')
+        '1.1.1.0/255.255.255.252', '', '')
     test1_result = ops1('show run')
 
     assert search(
@@ -785,7 +928,8 @@ def acl_permit_udp_dotted_netmask(ops1, hs1, hs2, topology, step):
     )
 
 
-def acl_deny_udp_dotted_netmask(ops1, hs1, hs2, topology, step):
+@mark.platform_incompatible(['docker'])
+def test_acl_deny_udp_dotted_netmask(configure_acl_test, topology, step):
     """
     This test adds a "1 permit udp 1.1.1.0/255.255.255.254
     1.1.1.0/255.255.255.252" rule on interface 1.
@@ -794,6 +938,14 @@ def acl_deny_udp_dotted_netmask(ops1, hs1, hs2, topology, step):
     protocol traffic is not received by hs2 by sending 10 ICMP packets.
     """
     global filter_udp, filter_icmp, timeout, count, port_str
+
+    ops1 = topology.get('ops1')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert ops1 is not None
+    assert hs1 is not None
+    assert hs2 is not None
 
     step('8.a Configure an ACL with 1 deny udp 1.1.1.0/255.255.255.254 '
          '1.1.1.0/255.255.255.252 rule')
@@ -894,7 +1046,9 @@ def acl_deny_udp_dotted_netmask(ops1, hs1, hs2, topology, step):
     )
 
 
-def acl_permit_udp_non_contiguous_mask(ops1, hs1, hs2, topology, step):
+@mark.platform_incompatible(['docker'])
+def test_acl_permit_udp_non_contiguous_mask(
+                                      configure_acl_test, topology, step):
     """
     This test adds a "1 permit udp 1.1.1.0/255.255.255.254
     1.1.1.0/255.255.255.252" rule on interface 1.
@@ -904,11 +1058,19 @@ def acl_permit_udp_non_contiguous_mask(ops1, hs1, hs2, topology, step):
     """
     global filter_udp, filter_icmp, timeout, count, port_str
 
+    ops1 = topology.get('ops1')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert ops1 is not None
+    assert hs1 is not None
+    assert hs2 is not None
+
     step('9.a Configure an ACL with 1 permit udp 1.0.1.0/255.0.255.254'
          ' any rule')
     configure_permit_acl(
         ops1, 'test', '1', 'udp', '1.0.1.0/255.0.255.254', '',
-        'any', '')
+        'any', '', '')
     test1_result = ops1('show run')
 
     assert search(
@@ -1003,7 +1165,8 @@ def acl_permit_udp_non_contiguous_mask(ops1, hs1, hs2, topology, step):
     )
 
 
-def acl_deny_udp_non_contiguous_mask(ops1, hs1, hs2, topology, step):
+@mark.platform_incompatible(['docker'])
+def test_acl_deny_udp_non_contiguous_mask(configure_acl_test, topology, step):
     """
     This test adds a "1 deny udp 1.1.1.0/255.255.255.254
     any" rule on interface 1.
@@ -1012,6 +1175,14 @@ def acl_deny_udp_non_contiguous_mask(ops1, hs1, hs2, topology, step):
     protocol traffic is not received by hs2 by sending 10 ICMP packets.
     """
     global filter_udp, filter_icmp, timeout, count, port_str
+
+    ops1 = topology.get('ops1')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert ops1 is not None
+    assert hs1 is not None
+    assert hs2 is not None
 
     step('10.a Configure an ACL with 1 deny udp 1.0.1.0/255.255.255.254 '
          'any rule')
@@ -1110,7 +1281,8 @@ def acl_deny_udp_non_contiguous_mask(ops1, hs1, hs2, topology, step):
     )
 
 
-def acl_permit_udp_dport_eq_param(ops1, hs1, hs2, topology, step):
+@mark.platform_incompatible(['docker'])
+def test_acl_permit_udp_dport_eq_param(configure_acl_test, topology, step):
     """
     This test adds a "1 permit udp 1.1.1.1 1.1.1.2 eq 48621" rule on
     interface 1.
@@ -1120,11 +1292,19 @@ def acl_permit_udp_dport_eq_param(ops1, hs1, hs2, topology, step):
     """
     global filter_udp, filter_udp_other, timeout, count, port_str
 
+    ops1 = topology.get('ops1')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert ops1 is not None
+    assert hs1 is not None
+    assert hs2 is not None
+
     step('11.a Configure an ACL with 1 permit udp 1.1.1.1 1.1.1.2 '
          'eq 48621 rule')
     configure_permit_acl(ops1, 'test', '1', 'udp', '1.1.1.1', '',
                          '1.1.1.2',
-                         'eq 48621')
+                         'eq 48621', '')
     test1_result = ops1('show run')
 
     assert search(
@@ -1217,7 +1397,8 @@ def acl_permit_udp_dport_eq_param(ops1, hs1, hs2, topology, step):
     )
 
 
-def acl_deny_udp_dport_eq_param(ops1, hs1, hs2, topology, step):
+@mark.platform_incompatible(['docker'])
+def test_acl_deny_udp_dport_eq_param(configure_acl_test, topology, step):
     """
     This test adds a "1 deny udp 1.1.1.1 1.1.1.2 eq 48621" rule on
     interface 1.
@@ -1226,6 +1407,14 @@ def acl_deny_udp_dport_eq_param(ops1, hs1, hs2, topology, step):
     protocol traffic is not received by hs2 by sending 10 ICMP packets.
     """
     global filter_udp, filter_udp_other, timeout, count, port_str
+
+    ops1 = topology.get('ops1')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert ops1 is not None
+    assert hs1 is not None
+    assert hs2 is not None
 
     step('12.a Configure an ACL with 1 permit udp 1.1.1.1 1.1.1.2 eq 48621 '
          'rule')
@@ -1323,7 +1512,8 @@ def acl_deny_udp_dport_eq_param(ops1, hs1, hs2, topology, step):
     )
 
 
-def acl_permit_udp_sport_eq_param(ops1, hs1, hs2, topology, step):
+@mark.platform_incompatible(['docker'])
+def test_acl_permit_udp_sport_eq_param(configure_acl_test, topology, step):
     """
     This test adds a "1 permit udp 1.1.1.1 eq 5555 1.1.1.2" rule on
     interface 1.
@@ -1333,11 +1523,19 @@ def acl_permit_udp_sport_eq_param(ops1, hs1, hs2, topology, step):
     """
     global filter_udp, filter_udp_other, timeout, count, port_str
 
+    ops1 = topology.get('ops1')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert ops1 is not None
+    assert hs1 is not None
+    assert hs2 is not None
+
     step('13.a Configure an ACL with 1 permit udp 1.1.1.1 eq 5555 '
          '1.1.1.2 rule')
     configure_permit_acl(ops1, 'test', '1', 'udp', '1.1.1.1', 'eq 5555',
                          '1.1.1.2',
-                         '')
+                         '', '')
     test1_result = ops1('show run')
 
     assert search(
@@ -1434,7 +1632,8 @@ def acl_permit_udp_sport_eq_param(ops1, hs1, hs2, topology, step):
     )
 
 
-def acl_deny_udp_sport_eq_param(ops1, hs1, hs2, topology, step):
+@mark.platform_incompatible(['docker'])
+def test_acl_deny_udp_sport_eq_param(configure_acl_test, topology, step):
     """
     This test adds a "1 deny udp 1.1.1.1 eq 5555 1.1.1.2" rule on
     interface 1.
@@ -1443,6 +1642,14 @@ def acl_deny_udp_sport_eq_param(ops1, hs1, hs2, topology, step):
     protocol traffic is not received by hs2 by sending 10 ICMP packets.
     """
     global filter_udp, filter_udp_other, timeout, count, port_str
+
+    ops1 = topology.get('ops1')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert ops1 is not None
+    assert hs1 is not None
+    assert hs2 is not None
 
     step('14.a Configure an ACL with 1 permit udp 1.1.1.1 eq 5555 '
          ' 1.1.1.2 rule')
@@ -1544,7 +1751,9 @@ def acl_deny_udp_sport_eq_param(ops1, hs1, hs2, topology, step):
     )
 
 
-def acl_modify_after_sending_udp_traffic(ops1, hs1, hs2, topology, step):
+@mark.platform_incompatible(['docker'])
+def test_acl_modify_after_sending_udp_traffic(
+                                        configure_acl_test, topology, step):
     """
     This test sends some traffic after applying an ACL to interface 1.
     It then stops traffic, modifies the ACL and verifies that traffic behavior
@@ -1552,9 +1761,18 @@ def acl_modify_after_sending_udp_traffic(ops1, hs1, hs2, topology, step):
     """
     global filter_udp, filter_icmp, count, timeout, port_str
 
+    ops1 = topology.get('ops1')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert ops1 is not None
+    assert hs1 is not None
+    assert hs2 is not None
+
     step('15.a Configure an ACL with 1 permit udp 1.1.1.1 1.1.1.2 rule')
     configure_permit_acl(
-                     ops1, 'test', '1', 'udp', '1.1.1.1', '', '1.1.1.2', '')
+                     ops1, 'test', '1', 'udp', '1.1.1.1', '',
+                     '1.1.1.2', '', '')
     test1_result = ops1('show run')
 
     assert search(
@@ -1706,7 +1924,8 @@ def acl_modify_after_sending_udp_traffic(ops1, hs1, hs2, topology, step):
          )
 
 
-def acl_deny_udp_on_multiple_ports(ops1, hs1, hs2, topology, step):
+@mark.platform_incompatible(['docker'])
+def test_acl_deny_udp_on_multiple_ports(configure_acl_test, topology, step):
     """
     This tests applies a deny rule for UDP and permit rule for ICMP on
     interfaces 1 and 2. Then, it passes UDP traffic in both directions
@@ -1715,6 +1934,14 @@ def acl_deny_udp_on_multiple_ports(ops1, hs1, hs2, topology, step):
     """
     global filter_udp, filter_icmp, filter_udp_reverse, filter_icmp_reverse
     global count, timeout, port_str
+
+    ops1 = topology.get('ops1')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert ops1 is not None
+    assert hs1 is not None
+    assert hs2 is not None
 
     step('16.a Configure a deny udp and permit icmp rule on ACL test')
     configure_deny_acl(ops1, 'test', '1', 'udp', '1.1.1.1', '',
@@ -1727,7 +1954,7 @@ def acl_deny_udp_on_multiple_ports(ops1, hs1, hs2, topology, step):
        '1.1.1.2'.format(**locals()), test1_result
     )
 
-    configure_permit_acl(ops1, 'test', '2', 'icmp', 'any', '', 'any', '')
+    configure_permit_acl(ops1, 'test', '2', 'icmp', 'any', '', 'any', '', '')
     test1_result = ops1('show run')
 
     assert search(
@@ -1861,7 +2088,7 @@ def acl_deny_udp_on_multiple_ports(ops1, hs1, hs2, topology, step):
     rxthread_icmp_reverse.join()
 
     step('16.j Verify results')
-    if rxthread_icmp.outresult():
+    if rxthread_icmp_reverse.outresult():
         rest, sniffcnt = rxthread_icmp_reverse.outresult().split('<Sniffed')
         list_result = findall(r'[0-9]+', sniffcnt)
         print(list_result)
@@ -1883,13 +2110,23 @@ def acl_deny_udp_on_multiple_ports(ops1, hs1, hs2, topology, step):
          )
 
 
-def acl_permit_icmp_on_multiple_ports(ops1, hs1, hs2, topology, step):
+@mark.platform_incompatible(['docker'])
+def test_acl_permit_icmp_on_multiple_ports(configure_acl_test, topology, step):
     """
     This test sends ICMP traffic from hs1 to hs2 after applying a permit
     ACL to interface 1. After it verifies that hs2 receives 10 packets,
     it sends traffic in the reverse direction and verifies that traffic
     behavior complies with the applied permit ACL
     """
+
+    ops1 = topology.get('ops1')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert ops1 is not None
+    assert hs1 is not None
+    assert hs2 is not None
+
     with ops1.libs.vtysh.ConfigAccessListIpTestname('test') as ctx:
         ctx.permit(
             '', '11', 'icmp', '1.1.1.1', '',
@@ -1948,7 +2185,6 @@ def acl_permit_icmp_on_multiple_ports(ops1, hs1, hs2, topology, step):
 
     list1 = [ip_packet, icmp_packet]
     proto_str = 'IP/ICMP'
-    filter_str = 'icmp and ip src 1.1.1.1 and ip dst 1.1.1.2'
     port_str = '1'
     timeout = 25
     count = 10
@@ -1959,7 +2195,7 @@ def acl_permit_icmp_on_multiple_ports(ops1, hs1, hs2, topology, step):
 
     rxthread = ScapyThread(
                 sniff_traffic,
-                'hs2', topology, '', [], filter_str, count, port_str, timeout)
+                'hs2', topology, '', [], filter_icmp, count, port_str, timeout)
 
     rxthread.start()
     txthread.start()
@@ -1976,7 +2212,6 @@ def acl_permit_icmp_on_multiple_ports(ops1, hs1, hs2, topology, step):
     step('Create packets')
     ip_packet = hs2.libs.scapy.ip("dst='1.1.1.1', src='1.1.1.2'")
     icmp_packet = hs2.libs.scapy.icmp()
-    filter_str = 'icmp and ip src 1.1.1.2 and ip dst 1.1.1.1'
 
     list1 = [ip_packet, icmp_packet]
     proto_str = 'IP/ICMP'
@@ -1990,7 +2225,8 @@ def acl_permit_icmp_on_multiple_ports(ops1, hs1, hs2, topology, step):
 
     rxthread = ScapyThread(
                 sniff_traffic,
-                'hs1', topology, '', [], filter_str, count, port_str, timeout)
+                'hs1', topology, '', [], filter_icmp_reverse, count, port_str,
+                timeout)
 
     rxthread.start()
     txthread.start()
@@ -2022,13 +2258,23 @@ def acl_permit_icmp_on_multiple_ports(ops1, hs1, hs2, topology, step):
     )
 
 
-def acl_replace_with_icmp_traffic(ops1, hs1, hs2, topology, step):
+@mark.platform_incompatible(['docker'])
+def test_acl_replace_with_icmp_traffic(configure_acl_test, topology, step):
     """
     This test sends 10 ICMP packets from hs1 to hs2 with an ACL applied
     on interface 1. Verifies that the packets have been received on hs2.
     It then replaces this ACL with a deny ACL and verifies that no traffic
     is seen on hs2.
     """
+
+    ops1 = topology.get('ops1')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert ops1 is not None
+    assert hs1 is not None
+    assert hs2 is not None
+
     with ops1.libs.vtysh.ConfigAccessListIpTestname('test') as ctx:
         ctx.permit(
             '', '1', 'icmp', '1.1.1.1', '', '1.1.1.2', '')
@@ -2060,7 +2306,6 @@ def acl_replace_with_icmp_traffic(ops1, hs1, hs2, topology, step):
 
     list1 = [ip_packet, icmp_packet]
     proto_str = 'IP/ICMP'
-    filter_str = 'icmp and ip src 1.1.1.1 and ip dst 1.1.1.2'
     port_str = '1'
     timeout = 25
     count = 10
@@ -2071,7 +2316,7 @@ def acl_replace_with_icmp_traffic(ops1, hs1, hs2, topology, step):
 
     rxthread = ScapyThread(
                 sniff_traffic,
-                'hs2', topology, '', [], filter_str, count, port_str, timeout)
+                'hs2', topology, '', [], filter_icmp, count, port_str, timeout)
 
     rxthread.start()
     txthread.start()
@@ -2117,7 +2362,7 @@ def acl_replace_with_icmp_traffic(ops1, hs1, hs2, topology, step):
 
     rxthread_icmp = ScapyThread(
                 sniff_traffic,
-                'hs2', topology, '', [], filter_str, count, port_str, timeout)
+                'hs2', topology, '', [], filter_icmp, count, port_str, timeout)
 
     rxthread_icmp.start()
     txthread_icmp.start()
@@ -2154,14 +2399,14 @@ def acl_replace_with_icmp_traffic(ops1, hs1, hs2, topology, step):
     )
 
 
-@mark.test_id(10405)
 @mark.platform_incompatible(['docker'])
-def test_classifierd_ft_acl_tier_2(topology, step):
+def test_acl_permit_any_hs1_hs2_hitcount(configure_acl_test, topology, step):
     """
-    Test traffic after applying ACEs to ports.
+    This test adds a "50 permit any 10.0.10.1 10.0.10.2 count" rule on
+    interface 1. It then sends 10 ICMP packets from hs1 to hs2 and verifies
+    that 10 ICMP packets are received on hs2 and the hitcount equals 10
+    """
 
-    Build a topology of one switch and two hosts on the same subnet.
-    """
     ops1 = topology.get('ops1')
     hs1 = topology.get('hs1')
     hs2 = topology.get('hs2')
@@ -2170,92 +2415,578 @@ def test_classifierd_ft_acl_tier_2(topology, step):
     assert hs1 is not None
     assert hs2 is not None
 
-    p1 = ops1.ports['1']
-    p2 = ops1.ports['2']
+    with ops1.libs.vtysh.ConfigAccessListIpTestname('test') as ctx:
+        ctx.permit('', '50', 'icmp', '1.1.1.1', '', '1.1.1.2', '', 'count')
 
-    # Mark interfaces as enabled
-    assert not ops1(
-        'set interface {p1} user_config:admin=up'.format(**locals()),
-        shell='vsctl'
+    test1_result = ops1('show run')
+
+    assert search(
+       ''
+       r'50\s+permit\s+icmp\s+1\.1\.1\.1'
+       '\s+1\.1\.1\.2 count'.format(
+                                         **locals()
+                                       ), test1_result
     )
-    assert not ops1(
-        'set interface {p2} user_config:admin=up'.format(**locals()),
-        shell='vsctl'
-    )
-
-    # Configure interfaces
-    with ops1.libs.vtysh.ConfigInterface('1') as ctx:
-        ctx.no_routing()
-        ctx.no_shutdown()
-
-    with ops1.libs.vtysh.ConfigInterface('2') as ctx:
-        ctx.no_routing()
-        ctx.no_shutdown()
-
-    ops1('show interface {p1}'.format(**locals()))
-    ops1('show interface {p2}'.format(**locals()))
-
-    hs1.send_command('service network-manager stop', shell='bash')
-    hs2.send_command('service network-manager stop', shell='bash')
-
-    hs1.libs.ip.interface('1', addr='1.1.1.1/24', up=True)
-    hs2.libs.ip.interface('1', addr='1.1.1.2/24', up=True)
-
-    with ops1.libs.vtysh.ConfigVlan('100') as ctx:
-        ctx.no_shutdown()
 
     with ops1.libs.vtysh.ConfigInterface('1') as ctx:
-        ctx.vlan_access(100)
+        ctx.apply_access_list_ip_in('test')
+
+    test1_result = ops1('show run')
+
+    show_interface_re = (
+        r'(?P<interface>\d+)\s+(?P<rule_applied>apply)'
+    )
+
+    interface_info, rest, *misc = test1_result.split(
+                        'apply access-list ip test in'
+                                    )
+
+    interface_line = findall(r'interface\s+\d+', interface_info)[-1]
+    interface_num = search('(?<=interface )\d+', interface_line).group()
+
+    assert search(
+        r'(access-list\s+ip\s+test\s+\in)'.format(
+                                          **locals()
+                                        ), test1_result
+    )
+
+    step("Create ICMP packets")
+    ip_packet = hs1.libs.scapy.ip("dst='1.1.1.2', src='1.1.1.1'")
+    icmp_packet = hs1.libs.scapy.icmp()
+
+    list1 = [ip_packet, icmp_packet]
+    proto_str = 'IP/ICMP'
+    port_str = '1'
+    timeout = 25
+    count = 10
+
+    txthread = ScapyThread(
+                send_traffic,
+                'hs1', topology, proto_str, list1, '', count, '', 0)
+
+    rxthread = ScapyThread(
+                sniff_traffic,
+                'hs2', topology, '', [], filter_icmp, count, port_str,
+                timeout)
+
+    rxthread.start()
+    txthread.start()
+
+    txthread.join()
+    rxthread.join()
+
+    if rxthread.outresult():
+        rest, sniffcnt = rxthread.outresult().split('<Sniffed:')
+        list_result = findall(r'[0-9]+', sniffcnt)
+
+        assert (list_result[2] == '10')
+
+    # delay added to retrieve correct hitcount
+    sleep(20)
+
+    hit_dict = ops1.libs.vtysh.show_access_list_hitcounts_ip_interface(
+                             'test', interface_num)
+
+    for rule, count in hit_dict.items():
+        print(rule, count)
+
+    assert(hit_dict['50 permit icmp 1.1.1.1 1.1.1.2 count'] == '10')
+
+    with ops1.libs.vtysh.ConfigAccessListIpTestname('test') as ctx:
+        ctx.no('50')
+
+    with ops1.libs.vtysh.Configure() as ctx:
+        ctx.no_access_list_ip('test')
+
+
+@mark.platform_incompatible(['docker'])
+def test_acl_permit_any_hs1_hs2_config_persistence_ten_entries(
+                                    configure_acl_test, topology, step
+                                    ):
+    """
+    This test adds a sequence of 10 " permit any 1.1.1.1 1.1.1.2 count"
+    rules on interface 1. It then sends 10 ICMP packets from hs1 to hs2
+    and verifies that configuration is persisted
+    """
+
+    ops1 = topology.get('ops1')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert ops1 is not None
+    assert hs1 is not None
+    assert hs2 is not None
+
+    seq = 0
+    ipaddr = ['1.1.1.1', '1.1.1.2', 'any', '10.0.10.3', '10.0.10.4',
+              '10.0.10.7', '10.0.10.5', '10.0.10.6', '10.0.10.1', '10.0.10.2']
+    protos = ['icmp', 'udp', 'tcp', 'sctp', 'igmp', 'pim', 'gre', 'ah', 'esp',
+              'any']
+
+    for (x, y) in zip(ipaddr, protos):
+        seq = seq + 1
+        test_multiple_aces(
+                    configure_permit_acl,
+                    (ops1, 'test', seq, y, x, '', 'any', '', 'count')
+                    )
+
+    with ops1.libs.vtysh.ConfigInterface('1') as ctx:
+        ctx.apply_access_list_ip_in('test')
+
+    test1_result = ops1('show run')
+
+    assert search(
+        r'(access-list\s+ip\s+test\s+\in)'.format(
+                                          **locals()
+                                        ), test1_result
+    )
+
+    interface_info, rest, *misc = test1_result.split(
+                        'apply access-list ip test in'
+                                    )
+
+    interface_line = findall(r'interface\s+\d+', interface_info)[-1]
+    interface_num = search('(?<=interface )\d+', interface_line).group()
+
+    create_and_verify_traffic(topology, hs1, hs2)
+
+    # delay added to retrieve correct hitcount
+    sleep(20)
+
+    hit_dict = ops1.libs.vtysh.show_access_list_hitcounts_ip_interface(
+                             'test', interface_num)
+
+    for rule, count in hit_dict.items():
+        print(rule, count)
+
+    assert(hit_dict['1 permit icmp 1.1.1.1 any count '] == '10')
+
+    ops1._shells['vtysh']._timeout = 1500
+    ops1.libs.vtysh.copy_running_config_startup_config()
+
+    run_res_before_boot = ops1.libs.vtysh.show_running_config()
+    start_res_before_boot = ops1.libs.vtysh.show_startup_config()
+    assert(run_res_before_boot == start_res_before_boot)
+
+    sleep(60)
+    print("Rebooting Switch")
+    reboot_switch(ops1, shell="vtysh")
+    sleep(60)
+
+    run_res_after_boot = ops1.libs.vtysh.show_running_config()
+    assert(run_res_before_boot == run_res_after_boot)
+
+    start_res_after_boot = ops1.libs.vtysh.show_startup_config()
+    assert(run_res_after_boot == start_res_after_boot)
+
+    test2_result = ops1('show run')
+
+    interface_info, rest, *misc = test2_result.split(
+                        'apply access-list ip test in'
+                                    )
+
+    interface_line = findall(r'interface\s+\d+', interface_info)[-1]
+    interface_num = search('(?<=interface )\d+', interface_line).group()
+
+    assert search(
+        r'(access-list\s+ip\s+test\s+\in)'.format(
+                                          **locals()
+                                        ), test2_result
+    )
+
+    create_and_verify_traffic(topology, hs1, hs2)
+
+    # delay added to retrieve correct hitcount
+    sleep(20)
+
+    hit_dict = ops1.libs.vtysh.show_access_list_hitcounts_ip_interface(
+                             'test', interface_num)
+
+    for rule, count in hit_dict.items():
+        print(rule, count)
+
+    assert(hit_dict['1 permit icmp 1.1.1.1 any count '] == '10')
+
+    with ops1.libs.vtysh.Configure() as ctx:
+        ctx.no_access_list_ip('test')
+
+
+@mark.platform_incompatible(['docker'])
+def test_acl_permit_any_hs1_hs2_config_persistence_300_entries(
+                                    configure_acl_test, topology, step
+                                    ):
+    """
+    This test adds a sequence of 300
+    rules on interface 1. It then sends 10 ICMP packets from hs1 to hs2
+    and verifies that configuration is persisted
+    """
+
+    ops1 = topology.get('ops1')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert ops1 is not None
+    assert hs1 is not None
+    assert hs2 is not None
+
+    seq = 0
+    ipaddr = ['1.1.1.1', '1.1.1.2', 'any', '10.0.10.3', '10.0.10.4',
+              '10.0.10.1', '10.0.10.5', '10.0.10.6', '10.0.10.2', '1.1.1.3',
+              '10.0.10.7', '10.0.10.8', '10.0.10.9', '1.1.1.10',
+              '1.1.1.11', '1.1.1.4', '1.1.1.12', '1.1.1.5', '1.1.1.6',
+              '1.1.1.7']
+
+    protos = ['icmp', 'udp', 'tcp', 'sctp', 'igmp', 'pim', 'gre', 'ah',
+              'esp', 'any', 'icmp', 'udp', 'tcp', 'sctp', 'igmp']
+
+    for (x, y) in product(ipaddr, protos):
+        seq = seq + 1
+        test_multiple_aces(
+                    configure_permit_acl,
+                    (ops1, 'test', seq, y, x, '', 'any', '', 'count')
+                    )
+
+    with ops1.libs.vtysh.ConfigInterface('1') as ctx:
+        ctx.apply_access_list_ip_in('test')
+
+    test1_result = ops1('show run')
+
+    assert search(
+        r'(access-list\s+ip\s+test\s+\in)'.format(
+                                          **locals()
+                                        ), test1_result
+    )
+
+    interface_info, rest, *misc = test1_result.split(
+                        'apply access-list ip test in'
+                                    )
+
+    interface_line = findall(r'interface\s+\d+', interface_info)[-1]
+    interface_num = search('(?<=interface )\d+', interface_line).group()
+
+    create_and_verify_traffic(topology, hs1, hs2)
+
+    # delay added to retrieve correct hitcount
+    sleep(20)
+
+    hit_dict = ops1.libs.vtysh.show_access_list_hitcounts_ip_interface(
+                             'test', interface_num)
+
+    for rule, count in hit_dict.items():
+        print(rule, count)
+
+    assert(hit_dict['1 permit icmp 1.1.1.1 any count '] == '10')
+
+    ops1._shells['vtysh']._timeout = 1500
+    ops1.libs.vtysh.copy_running_config_startup_config()
+    run_res_before_boot = ops1.libs.vtysh.show_running_config()
+
+    start_res_before_boot = ops1.libs.vtysh.show_startup_config()
+    assert(run_res_before_boot == start_res_before_boot)
+
+    sleep(60)
+    print("Rebooting Switch")
+    reboot_switch(ops1, shell="vtysh")
+    sleep(60)
+
+    run_res_after_boot = ops1.libs.vtysh.show_running_config()
+    assert(run_res_before_boot == run_res_after_boot)
+
+    start_res_after_boot = ops1.libs.vtysh.show_startup_config()
+    assert(run_res_after_boot == start_res_after_boot)
+
+    test2_result = ops1('show run')
+
+    interface_info, rest, *misc = test2_result.split(
+                        'apply access-list ip test in'
+                                    )
+
+    interface_line = findall(r'interface\s+\d+', interface_info)[-1]
+    interface_num = search('(?<=interface )\d+', interface_line).group()
+
+    assert search(
+        r'(access-list\s+ip\s+test\s+\in)'.format(
+                                          **locals()
+                                        ), test2_result
+    )
+
+    create_and_verify_traffic(topology, hs1, hs2)
+
+    # delay added to retrieve correct hitcount
+    sleep(20)
+
+    hit_dict = ops1.libs.vtysh.show_access_list_hitcounts_ip_interface(
+                             'test', interface_num)
+
+    for rule, count in hit_dict.items():
+        print(rule, count)
+
+    assert(hit_dict['1 permit icmp 1.1.1.1 any count '] == '10')
+
+    with ops1.libs.vtysh.Configure() as ctx:
+        ctx.no_access_list_ip('test')
+
+
+@mark.platform_incompatible(['docker'])
+def test_acl_permit_any_hs1_hs2_config_persistence_150x2_entries(
+                                    configure_acl_test, topology, step
+                                    ):
+    """
+    This test adds a sequence of 150 rules each on interface 1 and 2. It
+    then sends 10 ICMP packets from hs1 to hs2 and verifies that
+    configuration is persisted
+    """
+
+    ops1 = topology.get('ops1')
+    hs1 = topology.get('hs1')
+    hs2 = topology.get('hs2')
+
+    assert ops1 is not None
+    assert hs1 is not None
+    assert hs2 is not None
+
+    seq = 0
+    ipaddr1 = ['1.1.1.1', '1.1.1.2', 'any', '10.0.10.3', '10.0.10.4',
+               '10.0.10.1', '10.0.10.5', '10.0.10.6', '10.0.10.2', '1.1.1.3',
+               '10.0.10.7', '10.0.10.8', '10.0.10.9', '1.1.1.10',
+               '1.1.1.11']
+
+    protos1 = ['icmp', 'udp', 'tcp', 'sctp', 'igmp', 'pim', 'gre', 'ah',
+               'esp', 'any']
+
+    ipaddr2 = ['1.1.1.2', '10.0.10.5', '10.0.10.6', '10.0.10.2', '1.1.1.3',
+               '10.0.10.7', '10.0.10.8', '10.0.10.9', '1.1.1.10',
+               '1.1.1.11', '1.1.1.4', '1.1.1.12', '1.1.1.5', '1.1.1.6',
+               '1.1.1.7']
+
+    protos2 = ['icmp', 'udp', 'tcp', 'sctp', 'igmp', 'pim', 'gre', 'ah',
+               'esp', 'any']
+
+    for (x, y) in product(ipaddr1, protos1):
+        seq = seq + 1
+        test_multiple_aces(
+                    configure_permit_acl,
+                    (ops1, 'test1', seq, y, x, '', 'any', '', 'count')
+                    )
+
+    test1_result = ops1('show run')
+
+    with ops1.libs.vtysh.ConfigInterface('1') as ctx:
+        ctx.apply_access_list_ip_in('test1')
+
+    test1_result = ops1('show run')
+
+    assert search(
+        r'(access-list\s+ip\s+test1\s+\in)'.format(
+                                          **locals()
+                                        ), test1_result
+    )
+
+    interface_info, rest, *misc = test1_result.split(
+                        'apply access-list ip test1 in'
+                                    )
+
+    interface_line = findall(r'interface\s+\d+', interface_info)[-1]
+    interface_num = search('(?<=interface )\d+', interface_line).group()
+    print('INTERFACE is ')
+    print(interface_num)
+
+    create_and_verify_traffic(topology, hs1, hs2)
+
+    # delay added to retrieve correct hitcount
+    sleep(20)
+
+    hit_dict = ops1.libs.vtysh.show_access_list_hitcounts_ip_interface(
+                             'test1', interface_num)
+
+    for rule, count in hit_dict.items():
+        print(rule, count)
+
+    assert(hit_dict['1 permit icmp 1.1.1.1 any count '] == '10')
+
+    # Apply 150 ACEs on interface 2 now
+    for (x, y) in product(ipaddr2, protos2):
+        seq = seq + 1
+        test_multiple_aces(
+                    configure_permit_acl,
+                    (ops1, 'test2', seq, y, x, '', 'any', '', 'count')
+                    )
 
     with ops1.libs.vtysh.ConfigInterface('2') as ctx:
-        ctx.vlan_access(100)
+        ctx.apply_access_list_ip_in('test2')
 
-    step('Wait until interfaces are up')
-    for portlbl in ['1', '2']:
-        wait_until_interface_up(ops1, portlbl)
+    test1_result = ops1('show run')
 
-    ping = hs2.libs.ping.ping(1, '1.1.1.1')
+    assert search(
+        r'(access-list\s+ip\s+test2\s+\in)'.format(
+                                          **locals()
+                                        ), test1_result
+    )
 
-    step('Start scapy on host workstations')
-    hs1.libs.scapy.start_scapy()
-    hs2.libs.scapy.start_scapy()
+    interface_info, rest, *misc = test1_result.split(
+                        'apply access-list ip test2 in'
+                                    )
 
-    step('Test1 : acl_udp_any_any_permit')
-    acl_permit_udp_any_any(ops1, hs1, hs2, topology, step)
-    step('Test2: acl_udp_any_any_deny')
-    acl_deny_udp_any_any(ops1, hs1, hs2, topology, step)
-    step('Test3: acl_permit_udp_hs1_hs2')
-    acl_permit_udp_hs1_hs2(ops1, hs1, hs2, topology, step)
-    step('Test4: acl_deny_udp_hs1_hs2')
-    acl_deny_udp_hs1_hs2(ops1, hs1, hs2, topology, step)
-    step('Test5: acl_permit_udp_prefix_len_mask')
-    acl_permit_udp_prefix_len_mask(ops1, hs1, hs2, topology, step)
-    step('Test6: acl_deny_udp_prefix_len_mask')
-    acl_deny_udp_prefix_len_mask(ops1, hs1, hs2, topology, step)
-    step('Test7: acl_permit_udp_dotted_netmask')
-    acl_permit_udp_dotted_netmask(ops1, hs1, hs2, topology, step)
-    step('Test8: acl_deny_udp_dotted_netmask')
-    acl_deny_udp_dotted_netmask(ops1, hs1, hs2, topology, step)
-    step('Test9: acl_permit_udp_non_contiguous_mask')
-    acl_permit_udp_non_contiguous_mask(ops1, hs1, hs2, topology, step)
-    step('Test10: acl_deny_udp_non_contiguous_mask')
-    acl_deny_udp_non_contiguous_mask(ops1, hs1, hs2, topology, step)
-    step('Test11: acl_permit_udp_dport_eq_param')
-    acl_permit_udp_dport_eq_param(ops1, hs1, hs2, topology, step)
-    step('Test12: acl_deny_udp_dport_eq_param')
-    acl_deny_udp_sport_eq_param(ops1, hs1, hs2, topology, step)
-    step('Test13: acl_deny_udp_dport_eq_param')
-    acl_permit_udp_sport_eq_param(ops1, hs1, hs2, topology, step)
-    step('Test14: acl_deny_udp_dport_eq_param')
-    acl_deny_udp_dport_eq_param(ops1, hs1, hs2, topology, step)
-    step('Test15: acl_modify_after_sending_udp_traffic')
-    acl_modify_after_sending_udp_traffic(ops1, hs1, hs2, topology, step)
-    step('Test16: acl_deny_udp_on_multiple_ports')
-    acl_deny_udp_on_multiple_ports(ops1, hs1, hs2, topology, step)
-    step('Test17: acl_permit_icmp_on_multiple_ports')
-    acl_permit_icmp_on_multiple_ports(ops1, hs1, hs2, topology, step)
-    step('Test18: acl_replace_with_icmp_traffic')
-    acl_replace_with_icmp_traffic(ops1, hs1, hs2, topology, step)
+    interface_line = findall(r'interface\s+\d+', interface_info)[-1]
+    interface_num = search('(?<=interface )\d+', interface_line).group()
+
+    print('INTERFACE is ')
+    print(interface_num)
+
+    # clear hitcount on interface
+    ops1.libs.vtysh.clear_access_list_hitcounts_ip_interface(
+                                       'test2', interface_num)
+    step('Create packets')
+    ip_packet = hs1.libs.scapy.ip("dst='1.1.1.1', src='1.1.1.2'")
+    icmp_packet = hs1.libs.scapy.icmp()
+    filter_str = (
+                    "lambda p: ICMP in p and p[IP].src == '1.1.1.2' "
+                    "and p[IP].dst == '1.1.1.1'"
+                )
+    list1 = [ip_packet, icmp_packet]
+    proto_str = 'IP/ICMP'
+    port_str = '1'
+    timeout = 25
+    count = 10
+
+    txthread = ScapyThread(
+                send_traffic,
+                'hs2', topology, proto_str, list1, '', count, '', 0)
+
+    rxthread = ScapyThread(
+                sniff_traffic,
+                'hs1', topology, '', [], filter_str, count, port_str, timeout)
+
+    rxthread.start()
+    txthread.start()
+
+    txthread.join()
+    rxthread.join()
+
+    if rxthread.outresult():
+        rest, sniffcnt = rxthread.outresult().split('<Sniffed:')
+        list_result = findall(r'[0-9]+', sniffcnt)
+
+        assert (list_result[2] == '10')
+
+    # delay added to retrieve correct hitcount
+    sleep(20)
+
+    hit_dict = ops1.libs.vtysh.show_access_list_hitcounts_ip_interface(
+                             'test2', interface_num)
+
+    for rule, count in hit_dict.items():
+        print(rule, count)
+
+    assert(hit_dict['151 permit icmp 1.1.1.2 any count '] == '10')
+
+    # end Apply of ACEs on interface 2
+
+    with ops1.libs.vtysh.Configure() as ctx:
+        ctx.session_timeout(0)
+    ops1._shells['vtysh']._timeout = 1500
+    ops1.libs.vtysh.copy_running_config_startup_config()
+    run_res_before_boot = ops1.libs.vtysh.show_running_config()
+    start_res_before_boot = ops1.libs.vtysh.show_startup_config()
+    assert(run_res_before_boot == start_res_before_boot)
+
+    sleep(60)
+    print("Rebooting Switch")
+    reboot_switch(ops1, shell="vtysh")
+    sleep(60)
+
+    run_res_after_boot = ops1.libs.vtysh.show_running_config()
+    assert(run_res_before_boot == run_res_after_boot)
+
+    start_res_after_boot = ops1.libs.vtysh.show_startup_config()
+    assert(run_res_after_boot == start_res_after_boot)
+
+    # run traffic with 150 ACEs on interface 1
+    test2_result = ops1('show run')
+
+    interface_info, rest, *misc = test2_result.split(
+                        'apply access-list ip test1 in'
+                                    )
+
+    interface_line = findall(r'interface\s+\d+', interface_info)[-1]
+    interface_num = search('(?<=interface )\d+', interface_line).group()
+
+    assert search(
+        r'(access-list\s+ip\s+test1\s+\in)'.format(
+                                          **locals()
+                                        ), test2_result
+    )
+
+    create_and_verify_traffic(topology, hs1, hs2)
+
+    # delay added to retrieve correct hitcount
+    sleep(20)
+
+    hit_dict = ops1.libs.vtysh.show_access_list_hitcounts_ip_interface(
+                             'test1', interface_num)
+
+    for rule, count in hit_dict.items():
+        print(rule, count)
+
+    assert(hit_dict['1 permit icmp 1.1.1.1 any count '] == '10')
+
+    ops1.libs.vtysh.clear_access_list_hitcounts_all()
+
+    # run traffic with 150 ACEs on interface 2
+    interface_info, rest, *misc = test2_result.split(
+                        'apply access-list ip test2 in'
+                                    )
+
+    interface_line = findall(r'interface\s+\d+', interface_info)[-1]
+    interface_num = search('(?<=interface )\d+', interface_line).group()
+
+    print('INTERFACE is ')
+    print(interface_num)
+
+    # create_and_verify_traffic(topology, hs1, hs2)
+    step('Create packets')
+    ip_packet = hs1.libs.scapy.ip("dst='1.1.1.1', src='1.1.1.2'")
+    icmp_packet = hs1.libs.scapy.icmp()
+    filter_str = (
+                    "lambda p: ICMP in p and p[IP].src == '1.1.1.2' "
+                    "and p[IP].dst == '1.1.1.1'"
+                )
+    list1 = [ip_packet, icmp_packet]
+    proto_str = 'IP/ICMP'
+    port_str = '1'
+    timeout = 25
+    count = 10
+
+    txthread = ScapyThread(
+                send_traffic,
+                'hs2', topology, proto_str, list1, '', count, '', 0)
+
+    rxthread = ScapyThread(
+                sniff_traffic,
+                'hs1', topology, '', [], filter_str, count, port_str, timeout)
+
+    rxthread.start()
+    txthread.start()
+
+    txthread.join()
+    rxthread.join()
+
+    if rxthread.outresult():
+        rest, sniffcnt = rxthread.outresult().split('<Sniffed:')
+        list_result = findall(r'[0-9]+', sniffcnt)
+
+        assert (list_result[2] == '10')
+
+    # delay added to retrieve correct hitcount
+    sleep(20)
+
+    hit_dict = ops1.libs.vtysh.show_access_list_hitcounts_ip_interface(
+                             'test2', interface_num)
+
+    for rule, count in hit_dict.items():
+        print(rule, count)
+
+    assert(hit_dict['151 permit icmp 1.1.1.2 any count '] == '10')
 
 
 def wait_until_interface_up(switch, portlbl, timeout=30, polling_frequency=1):
@@ -2280,3 +3011,137 @@ def wait_until_interface_up(switch, portlbl, timeout=30, polling_frequency=1):
                 switch.identifier, portlbl, timeout
             )
         )
+
+
+def reboot_switch(switch, shell='vtysh', silent=False, onie=False):
+    """
+    Reboot the switch
+    :param topology_ostl.nodes.Switch switch: the switch node
+    :param str shell: shell to use to perfom the reboot
+    :param bool silent: suppress output if true.
+    :param bool onie: reboot to the onie rescue prompt if true
+    """
+
+    if not silent:
+        print('{} [{}].reboot_switch(onie=\'{}\', shell=\'{}\') ::'.format(
+            datetime.now().isoformat(), switch.identifier, onie, shell
+        ))
+
+    if shell == "bash":
+        _shell = switch.get_shell('bash')
+        _shell.send_command(
+            'reboot', matches=r'Restarting system.', timeout=300)
+
+    elif shell == "vtysh":
+        _shell = switch.get_shell('vtysh')
+        _shell.send_command(
+            'reboot', matches=r'\r\nDo you want to continue [y/n]?')
+        _shell.send_command('y', matches=r'Restarting system.', timeout=300)
+
+    elif shell == "onie":
+        _shell = switch.get_shell('bash')
+        _spawn = _shell._get_connection('0')
+        _spawn.sendline('reboot')
+        _spawn.expect(r'The system is going down NOW!', timeout=300)
+
+    else:
+        raise Exception(
+            'Shell {} reboot command is not supported.'.format(shell)
+        )
+
+    login_switch(switch, onie=onie)
+
+
+def login_switch(switch, onie=False):
+    """
+    Login to the switch
+    :param topology_ostl.nodes.Switch switch: the switch node
+    :param bool onie: login to the onie rescue prompt if true
+    """
+
+    _shell = switch.get_shell('bash')
+    _spawn = _shell._get_connection('0')
+
+    if(onie):
+        expect_matches = [
+            r'\*OpenSwitch.*',
+            r'\*ONIE: Install OS.*',
+            r'\*ONIE[^:].*',
+            r'\*ONIE: Rescue.*',
+            r'\r\nPlease press Enter to activate this console.',
+            r'\r\nONIE:/\s+#'
+        ]
+
+        for num in range(10):
+            index = _spawn.expect(expect_matches, timeout=300)
+            if (index == 0 or index == 1):
+                _spawn.send('v')
+            elif (index == 2 or index == 3 or index == 4):
+                _spawn.send('\r')
+            elif index == 5:
+                break
+    else:
+        expect_matches = [
+            r'(?<!Last )login:\s*$',
+            r'\r\nroot@[-\w]+:~# ',
+            r'\r\n[-\w]+(\([-\w\s]+\))?#'
+        ]
+
+        _spawn.sendline('')
+        for num in range(10):
+            sleep(0.5)
+            index = _spawn.expect(expect_matches, timeout=300)
+            if index == 0:
+                _spawn.sendline('root')
+            elif index == 1:
+                _spawn.sendline('vtysh')
+            elif index == 2:
+                break
+
+
+@fixture
+def test_multiple_aces(func, params, trace=True):
+    if trace:
+        print(params)
+    func(*params)
+
+
+def create_and_verify_traffic(
+                        topology, hs1, hs2
+                        ):
+    global filter_str
+    ip_packet = hs1.libs.scapy.ip("dst='1.1.1.2', src='1.1.1.1'")
+    icmp_packet = hs1.libs.scapy.icmp()
+
+    list1 = [ip_packet, icmp_packet]
+    proto_str = 'IP/ICMP'
+    port_str = '1'
+    timeout = 25
+    count = 10
+
+    txthread = ScapyThread(
+                send_traffic,
+                'hs1', topology, proto_str, list1, '', count, '', 0)
+
+    rxthread = ScapyThread(
+                sniff_traffic,
+                'hs2', topology, '', [], filter_str, count, port_str, timeout)
+
+    rxthread.start()
+    txthread.start()
+
+    txthread.join()
+    rxthread.join()
+
+    if rxthread.outresult():
+        rest, sniffcnt = rxthread.outresult().split('<Sniffed:')
+        list_result = findall(r'[0-9]+', sniffcnt)
+
+        assert (list_result[2] == '10')
+        assert search(
+                ''
+                r'ICMP\s+1\.1\.1\.1\s+\>\s+1\.1\.1\.2\s+'
+                'echo-request'.format(
+                                 **locals()
+                               ), rxthread.outresult()
+            )
