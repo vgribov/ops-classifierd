@@ -17,7 +17,7 @@
 # under the License.
 
 """
-OpenSwitch Test for simple ping between nodes.
+OpenSwitch Test for traffic mirroring
 """
 
 from pytest import mark
@@ -61,10 +61,7 @@ TOPOLOGY = """
 [type=host name="Host 2"] hs2
 [type=host name="Host 3"] hs3
 [type=host name="Sniffer 1" image="openswitch/ubuntuscapy:latest"] sn1
-[type=openswitch name="OpenSwitch 1" image="mirror3:latest"] ops1
-# [type=host name="Sniffer 1"] sn1
-# [type=openswitch name="OpenSwitch 1" target="AS5712"] ops1
-
+[type=openswitch name="OpenSwitch 1"] ops1
 
 # Links
 hs1:1 -- ops1:1
@@ -259,6 +256,7 @@ def pingandsniff(onoff, topology):
 
 # Mirror Test
 @mark.test_id(10300)
+@mark.platform_incompatible(['ostl'])
 def test_mirror(topology):
     """
     Test that a vlan configuration is functional with a OpenSwitch switch.
