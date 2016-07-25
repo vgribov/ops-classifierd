@@ -17,12 +17,11 @@
 
 import re
 
-import pytest
+from pytest import raises, mark, fixture
 from copy import deepcopy
 import sys
 import time
 
-from pytest import raises
 from topology_lib_vtysh.exceptions import IncompleteCommandException
 from topology_lib_vtysh.exceptions import UnknownCommandException
 
@@ -42,7 +41,7 @@ ops1 = None
 p1 = None
 switch_ip = None
 
-@pytest.fixture(scope="module")
+@fixture(scope="module")
 def setup(topology):
     global ops1
     ops1 = topology.get("ops1")
@@ -487,6 +486,7 @@ def case_qosTrustPortShow():
     with ops1.libs.vtysh.ConfigInterface('1') as ctx:
         ctx.no_qos_trust()
 
+@mark.gate
 def test_qos_ft(topology, setup):
     setUp_qosApplyGlobal()
 
