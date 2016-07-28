@@ -1337,7 +1337,7 @@ DEFUN (cli_show_access_list_hitcounts_all,
 DEFUN (cli_clear_access_list_hitcounts,
        cli_clear_access_list_hitcounts_cmd,
        "clear access-list hitcounts (ip) NAME (interface|vlan) ID { in }",
-       SHOW_STR
+       CLEAR_STR
        ACL_STR
        ACL_HITCOUNTS_STR
        ACL_IP_STR
