@@ -422,3 +422,36 @@ aces_cur_cfg_equal(const struct ovsrec_acl *acl_row)
     }
     return true;
 }
+
+void acl_mismatch_check_and_print(const struct ovsrec_acl *acl_applied_row,
+                                  const struct ovsrec_acl *acl_cfg_row,
+                                  const char *configuration,
+                                  const char *commands)
+{
+    const char *acl_name;
+
+    if (acl_applied_row != acl_cfg_row) {
+        if (configuration == NULL) {
+            if (acl_applied_row != NULL) {
+                acl_name = acl_applied_row->name;
+            } else {
+                acl_name = acl_cfg_row->name;
+            }
+        } else {
+            if (acl_cfg_row != NULL) {
+                acl_name = acl_cfg_row->name;
+            } else {
+                acl_name = acl_applied_row->name;
+            }
+        }
+        print_acl_mismatch_warning(acl_name, commands);
+    } else {
+        /* acl_applied_row is equal to acl_cfg_row so the param
+         * "configuration" is irrelevant here. */
+        if(acl_applied_row != NULL) {
+            if (!aces_cur_cfg_equal(acl_applied_row)) {
+                print_acl_mismatch_warning(acl_applied_row->name, commands);
+            }
+        }
+    }
+}

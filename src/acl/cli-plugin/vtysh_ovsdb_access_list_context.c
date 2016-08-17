@@ -40,6 +40,26 @@
 /** Utilize OVSDB interface code generated from schema */
 extern struct ovsdb_idl *idl;
 
+/**
+ * Prints acl mismatch warning in show run
+ *
+ * @param  p_msg     vtysh_ovsdb_cbmsg_ptr structure object
+ * @param  acl_name  Character pointer to the name of the acl to print in the
+ *                   warning
+ */
+static void
+print_acl_mismatch_warning_show_run(vtysh_ovsdb_cbmsg_ptr p_msg,
+                                    const char *acl_name)
+{
+    vtysh_ovsdb_cli_print(p_msg,
+                          "! access-list %s %s%s"
+                          "! %s",
+                          acl_name,
+                          ACL_MISMATCH_WARNING,
+                          VTY_NEWLINE,
+                          ACL_MISMATCH_HINT_SHOW);
+}
+
 vtysh_ret_val
 show_run_access_list_callback(void *p_private)
 {
@@ -109,6 +129,8 @@ show_run_access_list_subcontext_callback(void *p_private)
     const struct ovsrec_interface *interface_row = NULL;
     const struct ovsrec_port *port_row = NULL;
     const struct ovsrec_acl *acl_row = NULL;
+    const struct ovsrec_acl *acl_app_row = NULL;
+    char *acl_name = NULL;
     int i;
 
     /* Determine context type and subtype we were called for */
@@ -121,18 +143,19 @@ show_run_access_list_subcontext_callback(void *p_private)
     }
 
     /* Print VLAN ACL, if any */
-    if (vlan_row && vlan_row->aclv4_in_cfg) {
+    if (vlan_row) {
         if (vlan_row->aclv4_in_applied != vlan_row->aclv4_in_cfg) {
-            vtysh_ovsdb_cli_print(p_msg,
-                                  "! access-list %s %s%s"
-                                  "! %s",
-                                  vlan_row->aclv4_in_cfg->name,
-                                  ACL_MISMATCH_WARNING,
-                                  VTY_NEWLINE,
-                                  ACL_MISMATCH_HINT_SHOW);
+            if (vlan_row->aclv4_in_cfg != NULL) {
+                acl_name = vlan_row->aclv4_in_cfg->name;
+            } else {
+                acl_name = vlan_row->aclv4_in_applied->name;
+            }
+            print_acl_mismatch_warning_show_run(p_msg, acl_name);
         }
+        if(vlan_row->aclv4_in_cfg) {
         vtysh_ovsdb_cli_print(p_msg, "    apply access-list ip %s in",
                               vlan_row->aclv4_in_cfg->name);
+        }
     }
     /* Print port ACL, if any (LAGs won't have interface name == port name) */
     if (interface_row) {
@@ -140,17 +163,20 @@ show_run_access_list_subcontext_callback(void *p_private)
         if (port_row) {
             for (i = ACL_CFG_MIN_PORT_TYPES; i <= ACL_CFG_MAX_PORT_TYPES; i++) {
                 acl_row = acl_db_util_get_cfg(&acl_db_accessor[i], port_row);
-                if (port_row && acl_row) {
-                    if (acl_db_util_get_applied(&acl_db_accessor[i], port_row)
-                            != acl_row) {
-                        vtysh_ovsdb_cli_print(p_msg,
-                                              "! access-list %s %s%s"
-                                              "! %s",
-                                              acl_row->name,
-                                              ACL_MISMATCH_WARNING,
-                                              VTY_NEWLINE,
-                                              ACL_MISMATCH_HINT_SHOW);
+                acl_app_row = acl_db_util_get_applied(&acl_db_accessor[i], port_row);
+                if(acl_app_row != acl_row) {
+                    if (acl_row != NULL) {
+                        acl_name = acl_row->name;
+                    } else {
+                        acl_name = acl_app_row->name;
                     }
+                    print_acl_mismatch_warning_show_run(p_msg, acl_name);
+                } else if (acl_row != NULL) {
+                    if (!aces_cur_cfg_equal(acl_row)) {
+                        print_acl_mismatch_warning_show_run(p_msg, acl_row->name);
+                    }
+                }
+                if (port_row && acl_row) {
                     vtysh_ovsdb_cli_print(p_msg,
                                           "    apply access-list ip %s %s",
                                           acl_row->name,

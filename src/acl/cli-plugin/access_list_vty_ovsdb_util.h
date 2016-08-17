@@ -174,4 +174,17 @@ void print_acl_mismatch_warning(const char *acl_name, const char *commands);
  */
 bool aces_cur_cfg_equal(const struct ovsrec_acl *acl_row);
 
+/**
+ * Test and print a warning if the ACL has not been applied yet.
+ *
+ * @param  acl_applied_row pointer to Applied ACL to test
+ * @param  acl_cfg_row     pointer to Configured ACL to test
+ * @param  configuration   pointer to 'configuration' or NULL
+ * @param  commands        pointer to 'commands' or NULL
+ *
+ */
+void acl_mismatch_check_and_print(const struct ovsrec_acl *acl_applied_row,
+                                  const struct ovsrec_acl *acl_cfg_row,
+                                  const char *configuration,
+                                  const char *commands);
 #endif /* _ACCESS_LIST_VTY_OVSDB_UTIL_H */
