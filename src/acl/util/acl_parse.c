@@ -130,6 +130,47 @@ ipv4_mask_create(uint8_t prefix_len)
     return prefix_len ? htonl(~((0x1u << (32 - prefix_len)) - 1)) : 0;
 }
 
+static bool
+ipv4_address_is_complete (const char *v4_addr)
+{
+    int x,dots = 0;
+
+    if (v4_addr == NULL) {
+        return false;
+    }
+
+    for (x=0;;x++) {
+       if (v4_addr[x] == '\0') {
+
+          if (v4_addr[x-1] == '.') {
+             /* No digits after last dot */
+             return false;
+          }
+
+          if (dots < 3) {
+             /* not enough number sections seen */
+             return false;
+          }
+          break;
+       }
+
+       if (v4_addr[x] == '.') {
+          if (dots == 3) {
+             /* too many dots/sections */
+             return false;
+          }
+          dots++;
+          continue;
+       }
+
+       if (!isdigit(v4_addr[x])) {
+           /* illegal char */
+           return false;
+       }
+    }
+    return true;
+}
+
 bool
 acl_ipv4_address_user_to_normalized(const char *user_str, char *normalized_str)
 {
@@ -148,6 +189,16 @@ acl_ipv4_address_user_to_normalized(const char *user_str, char *normalized_str)
     slash_ptr = strchr(user_str, '/');
     /* If no mask is given, set host mask (/32) */
     if (!slash_ptr) {
+
+        /* The 'A.B.C.D' CMDSTR permits short-form v4 addrs, but we don't accept
+         * ACE src/dst in this form nor will we pad them out (e.g. via inet_aton).
+         * The CMDSTR does however ensure that the numeric sections are in the
+         * proper range so no further validation is necessary.
+         */
+        if (!ipv4_address_is_complete(user_str)) {
+            return false;
+        }
+
         strncpy(normalized_str, user_str, INET_ADDRSTRLEN*2);
         strcat(normalized_str, "/255.255.255.255");
         return true;
