@@ -216,6 +216,12 @@ vtysh_ovsdb_show_copp_protocol_statistics(int argc, const char *argv[])
         vty_out(vty, "\tControl Plane Packet: STP packets\n\n");
         temp_copp_stats_tokenize(buf);
 
+    } else if (strncmp(argv[0], "bfd", COPP_STATS_PROTOCOL_MAX_LENGTH) == 0) {
+        buf = smap_get(&ovs_system->copp_statistics, temp_copp_keys[COPP_BFD]);
+        COPP_VALIDATE_BUFFER(buf);
+        vty_out(vty, "\tControl Plane Packet: BFD packets\n\n");
+        temp_copp_stats_tokenize(buf);
+
     } else if (strncmp(argv[0], "ipv4-options", COPP_STATS_PROTOCOL_MAX_LENGTH) == 0) {
         buf = smap_get(&ovs_system->copp_statistics, temp_copp_keys[COPP_IPv4_OPTIONS]);
         COPP_VALIDATE_BUFFER(buf);
@@ -358,6 +364,11 @@ vtysh_ovsdb_show_copp_generic_statistics()
     vty_out(vty, "\tControl Plane Packet: STP packets\n\n");
     temp_copp_stats_tokenize(buf);
 
+    buf = smap_get(&ovs_system->copp_statistics, temp_copp_keys[COPP_BFD]);
+    COPP_VALIDATE_BUFFER(buf);
+    vty_out(vty, "\tControl Plane Packet: BFD packets\n\n");
+    temp_copp_stats_tokenize(buf);
+
     buf = smap_get(&ovs_system->copp_statistics, temp_copp_keys[COPP_IPv4_OPTIONS]);
     COPP_VALIDATE_BUFFER(buf);
     vty_out(vty, "\tControl Plane Packet: ipv4-options packets\n\n");
@@ -404,6 +415,7 @@ DEFUN ( vtysh_show_copp_protocol_statistics,
         "Show acl-logging pkts copp statistics\n"
         "Show sflow pkts copp statistics\n"
         "Show stp pkts copp statistics\n"
+        "Show bfd pkts copp statistics\n"
         "Show unknown-ip pkts copp statistics\n"
         "Show unclassified pkts copp statistics\n"
       )

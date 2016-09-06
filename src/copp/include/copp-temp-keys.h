@@ -62,6 +62,7 @@ const char *const temp_copp_keys[COPP_NUM_CLASSES] = {
     [COPP_OSPFv2_UNICAST] =     "temp_copp_ospfv2_unicast",
     [COPP_sFLOW_SAMPLES] =      "temp_copp_sflow_samples",
     [COPP_STP_BPDU] =           "temp_copp_stp_bpdu",
+    [COPP_BFD] =                "temp_copp_bfd",
     [COPP_UNKNOWN_IP_UNICAST] = "temp_copp_unknown_ip_unicast",
     [COPP_IPv4_OPTIONS] =       "temp_copp_ipv4_options",
     [COPP_IPv6_OPTIONS] =       "temp_copp_ipv6_options"
