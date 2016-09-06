@@ -19,6 +19,7 @@
 OpenSwitch Test for vlan related configurations.
 """
 
+from pytest import mark
 from topo_defs import topology_1switch_2host_def
 from topo_funcs import topology_1switch_2host
 from topo_funcs import config_switch_l2
@@ -35,6 +36,7 @@ vlan_id = 10
 TOPOLOGY = topology_1switch_2host_def
 
 
+@mark.platform_incompatible(['docker'])
 def test_validate_1switch_2host_l2(topology):
 
     ops1 = topology.get('ops1')

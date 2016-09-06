@@ -19,6 +19,7 @@
 OpenSwitch Test for simple ping test between two host with LAG interface
 """
 
+from pytest import mark
 from topo_defs import topology_2switch_2host_lag_def
 from topo_funcs import topology_2switch_2host_lag
 from topo_funcs import config_switches_l3_lag
@@ -43,6 +44,7 @@ lag_id_s2 = 100
 TOPOLOGY = topology_2switch_2host_lag_def
 
 
+@mark.platform_incompatible(['docker'])
 def test_validate_2switch_2host_lag_l3(topology):
 
     ops1 = topology.get('ops1')

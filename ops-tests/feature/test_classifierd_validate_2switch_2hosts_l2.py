@@ -19,6 +19,7 @@
 OpenSwitch Test for simple ping between nodes.
 """
 
+from pytest import mark
 from topo_defs import topology_2switch_2host_def
 from topo_funcs import topology_2switch_2host
 from topo_funcs import config_2switch_l2
@@ -36,6 +37,7 @@ vlan_id_s2 = 10
 TOPOLOGY = topology_2switch_2host_def
 
 
+@mark.platform_incompatible(['docker'])
 def test_validate_2switch_2host_l2(topology):
 
     ops1 = topology.get('ops1')
