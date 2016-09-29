@@ -130,44 +130,46 @@ acl_port_update_hw_ready_state(const struct ovsrec_port *port_row)
                (strncmp(hw_status,
                         OPS_INTF_HW_READY_VALUE_STR_FALSE,
                         strlen(OPS_INTF_HW_READY_VALUE_STR_FALSE)) == 0)) {
+                VLOG_DBG("port %s: setting hw_ready_state to true on "
+                          "interface %s\n", port_row->name,
+                          port_row->interfaces[intf_idx]->name);
 
-                /* If hw_ready was blocked due to acls, set the hw_status
-                 * to true and delete hw_blocked_reason key
-                 */
-                hw_status =
-                 smap_get(
-                  (const struct smap *)&port_row->interfaces[intf_idx]->hw_status,
-                  OPS_INTF_HW_READY_BLOCKED_REASON_STR);
-                if((hw_status == NULL) ||
-                   (strncmp(hw_status, OPS_INTF_HW_READY_BLOCKED_REASON_VALUE_STR_ACLS,
-                            strlen(OPS_INTF_HW_READY_BLOCKED_REASON_VALUE_STR_ACLS)) == 0)) {
-
-                    VLOG_DBG("port %s: setting hw_ready_state to true on "
-                             "interface %s\n", port_row->name,
-                             port_row->interfaces[intf_idx]->name);
-
-                    /* set interface hw_ready_state to true in db */
-                    ovsrec_interface_update_hw_status_setkey(
-                                             port_row->interfaces[intf_idx],
-                                             OPS_INTF_HW_READY_KEY_STR,
-                                             OPS_INTF_HW_READY_VALUE_STR_TRUE);
-
-                    ovsrec_interface_update_hw_status_delkey(
+                /* set interface hw_ready_state to true in db */
+                ovsrec_interface_update_hw_status_setkey(
                                          port_row->interfaces[intf_idx],
-                                         OPS_INTF_HW_READY_BLOCKED_REASON_STR);
+                                         OPS_INTF_HW_READY_KEY_STR,
+                                         OPS_INTF_HW_READY_VALUE_STR_TRUE);
 
-                    /* set the user_config to up */
-                    ovsrec_interface_update_user_config_setkey(
-                                    port_row->interfaces[intf_idx],
-                                    INTERFACE_USER_CONFIG_MAP_ADMIN,
-                                    OVSREC_INTERFACE_USER_CONFIG_ADMIN_UP);
+                /* increment rc to indicate db update */
+                rc++;
+            }
 
-                    /* update the admin_state in port table to up */
-                    port_admin_state = OVSREC_INTERFACE_ADMIN_STATE_UP;
+            /* If hw_ready was blocked due to acls, set the hw_status
+             * to true and delete hw_blocked_reason key
+             */
+            hw_status =
+             smap_get(
+              (const struct smap *)&port_row->interfaces[intf_idx]->hw_status,
+              OPS_INTF_HW_READY_BLOCKED_REASON_STR);
+            if((hw_status != NULL) &&
+               (strncmp(hw_status, OPS_INTF_HW_READY_BLOCKED_REASON_VALUE_STR_ACLS,
+                        strlen(OPS_INTF_HW_READY_BLOCKED_REASON_VALUE_STR_ACLS)) == 0)) {
 
-                    /* increment rc to indicate db update */
-                    rc++;
-                }
+                ovsrec_interface_update_hw_status_delkey(
+                                     port_row->interfaces[intf_idx],
+                                     OPS_INTF_HW_READY_BLOCKED_REASON_STR);
+
+                /* set the user_config to up */
+                ovsrec_interface_update_user_config_setkey(
+                                port_row->interfaces[intf_idx],
+                                INTERFACE_USER_CONFIG_MAP_ADMIN,
+                                OVSREC_INTERFACE_USER_CONFIG_ADMIN_UP);
+
+                /* update the admin_state in port table to up */
+                port_admin_state = OVSREC_INTERFACE_ADMIN_STATE_UP;
+
+                /* increment rc to indicate db update */
+                rc++;
             }
         }
         else
