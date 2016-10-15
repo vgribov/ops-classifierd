@@ -68,16 +68,18 @@ acl_ports_is_hw_ready(const struct ovsrec_port *port_row)
             const struct smap acl_status =
                 acl_db_util_get_cfg_status(&acl_db_accessor[acl_type_iter],
                                            port_row);
+            if (smap_is_empty(&acl_status)) {
+                return false;
+            }
 
             status_str = smap_get(&acl_status, OPS_CLS_STATUS_CODE_STR);
+            if (status_str == NULL) {
+                return false;
+            }
 
             VLOG_DBG("port %s: ACL %s configured, apply status %s \n",
                       port_row->name, acl_row->name,
                       status_str);
-
-            if (status_str == NULL) {
-                return false;
-            }
 
             if(strtoul(status_str, NULL, 10) != OPS_CLS_STATUS_SUCCESS) {
                 /* block hw_ready on this interface */

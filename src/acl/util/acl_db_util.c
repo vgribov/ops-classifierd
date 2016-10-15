@@ -79,7 +79,9 @@ struct acl_db_util acl_db_accessor[ACL_CFG_MAX_TYPES];
     acl_db_accessor[idx].status_setkey = \
                           ovsrec_##table##_update_##base##_status_setkey; \
     acl_db_accessor[idx].set_statistics = \
-                          ovsrec_##table##_set_##base##_statistics;
+                          ovsrec_##table##_set_##base##_statistics; \
+    acl_db_accessor[idx].status_delkey = \
+                          ovsrec_##table##_update_##base##_status_delkey;
 
 
 void
@@ -269,4 +271,12 @@ acl_db_util_set_statistics(const struct acl_db_util *acl_db,
                                             size_t n_statistics)
 {
     (*acl_db->set_statistics)(port, key_statistics, value_statistics, n_statistics);
+}
+
+void
+acl_db_util_status_delkey(const struct acl_db_util *acl_db,
+                          const struct ovsrec_port *port,
+                          char *status)
+{
+    (*acl_db->status_delkey)(port, status);
 }

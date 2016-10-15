@@ -89,6 +89,8 @@ struct acl_db_util {
                             const int64_t *key_aclv4_in_statistics,
                             const int64_t *value_aclv4_in_statistics,
                             size_t n_aclv4_in_statistics);
+    void (*status_delkey) (const struct ovsrec_port *,
+                           char *status_str);
 };
 
 /**
@@ -354,4 +356,16 @@ acl_db_util_set_statistics(const struct acl_db_util *acl_db,
                                             const int64_t *key_statistics,
                                             const int64_t *value_statistics,
                                             size_t n_statistics);
+
+/**
+ * Deletes the cfg_status column of a given ovsrec_port
+ *
+ * @param[in] acl_db - Pointer to the @see acl_db_utl structure
+ * @param[in] port   - Pointer to the port row
+ * @param[in] status - Pointer to the status key string
+ */
+void
+acl_db_util_status_delkey(const struct acl_db_util *acl_db,
+                          const struct ovsrec_port *port,
+                          char *status);
 #endif  /* __ACL_DB_UTIL_H__ */

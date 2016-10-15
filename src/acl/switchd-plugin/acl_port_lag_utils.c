@@ -17,6 +17,7 @@
 #include "bridge.h"
 #include "vrf.h"
 #include "acl_port.h"
+#include "acl_db_util.h"
 #include "acl_port_lag_utils.h"
 #include "vswitch-idl.h"
 #include "openvswitch/vlog.h"
@@ -435,4 +436,44 @@ acl_port_lag_iface_removed(struct acl_port_interface *acl_port_iface,
     }
 
     return true;
+}
+
+
+/**************************************************************************//**
+ * This function checks if an ACL is configured for a LAG port
+ * and if yes, deletes the config status in the port table
+ *
+ * @param[in] acl_port  - Pointer to @see struct acl_port
+ * @param[in] port      - Pointer to @see struct port
+ *****************************************************************************/
+void
+acl_port_lag_check_and_delete_cfg_status(struct acl_port *acl_port,
+                                         struct port *port)
+{
+    if ((acl_port == NULL) || (port == NULL)) {
+        return;
+    }
+
+    for (int acl_type_iter = ACL_CFG_MIN_PORT_TYPES;
+          acl_type_iter <= ACL_CFG_MAX_PORT_TYPES; acl_type_iter++) {
+        const struct ovsrec_acl *ovsdb_acl =
+                 acl_db_util_get_cfg(acl_port->port_map[acl_type_iter].acl_db,
+                                     port->cfg);
+        if (ovsdb_acl == NULL) {
+            continue;
+        }
+
+        acl_db_util_status_delkey(acl_port->port_map[acl_type_iter].acl_db,
+                                  port->cfg,
+                                  OPS_CLS_STATUS_VERSION_STR);
+        acl_db_util_status_delkey(acl_port->port_map[acl_type_iter].acl_db,
+                                  port->cfg,
+                                  OPS_CLS_STATUS_STATE_STR);
+        acl_db_util_status_delkey(acl_port->port_map[acl_type_iter].acl_db,
+                                  port->cfg,
+                                  OPS_CLS_STATUS_CODE_STR);
+        acl_db_util_status_delkey(acl_port->port_map[acl_type_iter].acl_db,
+                                  port->cfg,
+                                  OPS_CLS_STATUS_MSG_STR);
+    }
 }

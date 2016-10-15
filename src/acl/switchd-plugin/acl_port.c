@@ -640,7 +640,7 @@ acl_port_map_stats_get(struct acl_port_map *acl_port_map,
 static void
 acl_port_map_unapply_for_acl_cfg_delete(struct acl_port_map* acl_port_map)
 {
-    VLOG_DBG("ACL_PORT_MAP %s:%s:%s upapply for ACL delete",
+    VLOG_DBG("ACL_PORT_MAP %s:%s:%s unapply for ACL delete",
              acl_port_map->parent->port->name,
              ops_cls_type_strings[acl_port_map->acl_db->type],
              ops_cls_direction_strings[acl_port_map->acl_db->direction]);
@@ -758,7 +758,7 @@ acl_port_lag_ifaces_acl_remove(struct acl_port *acl_port,
      * iface
      */
     for (int acl_type_iter = ACL_CFG_MIN_PORT_TYPES;
-          acl_type_iter <= ACL_CFG_MIN_PORT_TYPES; acl_type_iter++) {
+          acl_type_iter <= ACL_CFG_MAX_PORT_TYPES; acl_type_iter++) {
         const struct ovsrec_acl *ovsdb_acl =
                  acl_db_util_get_cfg(acl_port->port_map[acl_type_iter].acl_db,
                                      port->cfg);
@@ -987,6 +987,9 @@ acl_port_lag_ifaces_process_delete(struct port *port,
 
     /* Unset the hw_acl as none of the lag ifaces are active */
     acl_port_lag_check_and_unset_hw_acl(acl_port);
+
+    /* Unset the cfg_status as the lag is getting deleted */
+    acl_port_lag_check_and_delete_cfg_status(acl_port, port);
 }
 
 
@@ -1427,7 +1430,6 @@ void acl_callback_port_reconfigure(struct blk_params *blk_params)
                         /* If the port row modification was unapply ACL, then
                          * this case is hit.
                          */
-                         VLOG_DBG("PORT %s deleted", port->name);
                          acl_port_map_cfg_delete(
                              &acl_port->port_map[acl_type_iter],
                              port,

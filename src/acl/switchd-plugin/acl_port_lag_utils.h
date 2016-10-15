@@ -91,7 +91,7 @@ acl_port_lag_iface_list_element_add(struct acl_port *acl_port,
  * This function creates a list of interfaces for a LAG port in
  * the acl_port
  *
- * @param[in]   port        - Pointer to @see struct port
+ * @param[in]   acl_port    - Pointer to @see struct acl_port
  * @param[out]  iface_list  - port interfaces list
  *****************************************************************************/
 void
@@ -186,5 +186,16 @@ acl_port_lag_iface_changed_to_shutdown_state(struct iface *iface,
 bool
 acl_port_lag_iface_removed(struct acl_port_interface *acl_port_iface,
                            struct port *port);
+
+/**************************************************************************//**
+ * This function checks if an ACL is configured for a LAG port
+ * and if yes, deletes the config status in the port table
+ *
+ * @param[in] acl_port  - Pointer to @see struct acl_port
+ * @param[in] port      - Pointer to @see struct port
+ *****************************************************************************/
+void
+acl_port_lag_check_and_delete_cfg_status(struct acl_port *acl_port,
+                                         struct port *port);
 
 #endif  /* __SWITCHD__PLUGIN__ACL_PORT_LAG_UTILS_H__ */
