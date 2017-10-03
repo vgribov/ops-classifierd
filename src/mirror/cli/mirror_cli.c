@@ -15,6 +15,8 @@
  *
  ***************************************************************************/
 
+#include <inttypes.h>
+
 #include <vtysh/command.h>
 #include <vtysh/memory.h>
 #include <vtysh/vtysh.h>
@@ -279,12 +281,12 @@ cli_show_mirror_exec (const char *mirror_arg)
 
             atom.string = mirror_statistics[0];
             index = ovsdb_datum_find_key(datum, &atom, OVSDB_TYPE_STRING);
-            vty_out(vty, " Output Packets: %ld%s",
+            vty_out(vty, " Output Packets: %" PRIi64 "%s",
                        ((index == UINT_MAX)? 0 : datum->values[index].integer),
                                                                   VTY_NEWLINE);
             atom.string = mirror_statistics[1];
             index = ovsdb_datum_find_key(datum, &atom, OVSDB_TYPE_STRING);
-            vty_out(vty, " Output Bytes: %ld%s",
+            vty_out(vty, " Output Bytes: %" PRIi64 "%s",
                        ((index == UINT_MAX)? 0 : datum->values[index].integer),
                                                                   VTY_NEWLINE);
             break;

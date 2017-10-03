@@ -15,6 +15,7 @@
  */
 
 
+#include <inttypes.h>
 #include <stdlib.h>
 #include <errno.h>
 #include "list.h"
@@ -350,7 +351,7 @@ copp_stats_cb(struct stats_blk_params *sblk, enum stats_block_id blk_id) {
     for (int tots=0; tots<COPP_STATS_TOTAL_MAX; tots++) {
 
         len = snprintf(stats_buf, STATS_BUF_SIZE,
-            "%lu", copp_stats_totals[tots]);
+            "%" PRIu64, copp_stats_totals[tots]);
         if (len < 0) {
             VLOG_WARN("could not convert totals to text; not reporting total"
                 " [%d]", tots);

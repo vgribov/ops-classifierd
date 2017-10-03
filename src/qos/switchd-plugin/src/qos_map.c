@@ -20,6 +20,7 @@
 
 #include "qos_map.h"
 
+#include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -119,7 +120,7 @@ qos_configure_global_dscp_map(struct ofproto *ofproto,
         if (OVSREC_IDL_IS_ROW_MODIFIED(ovsrec_dscp_map_entry, idl_seqno) ||
             OVSREC_IDL_IS_ROW_INSERTED(ovsrec_dscp_map_entry, idl_seqno)) {
             dscp_map_settings.n_entries++;
-            VLOG_DBG("%s: MODIFIED %s %ld", __FUNCTION__,
+            VLOG_DBG("%s: MODIFIED %s %" PRIi64, __FUNCTION__,
                      ovsrec_dscp_map_entry->description,
                      ovsrec_dscp_map_entry->code_point);
         }
