@@ -66,7 +66,7 @@ VLOG_DEFINE_THIS_MODULE(ops_cls_status_msgs);
  *  Note: one space at the end is added for readability because the reason
  *  string will be appended to this string.
  */
-#define OPS_CLS_STATUS_MSG_SEQ_NUM_VALID    " at entry sequence number %d, "
+#define OPS_CLS_STATUS_MSG_SEQ_NUM_VALID    " at entry sequence number %u, "
 
 /** string to be displayed if sequence number is NOT valid
  *  e.g. statistics operations or general failures not specific
